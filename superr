@@ -797,6 +797,16 @@ boot_unpack() {
 	cd $romdir
 }
 build_custom_zip() {
+	docustzip() {
+		if [[ -f $signature2.zip ]]; then
+			mv $signature2.zip ${signature2}_$timestamp.zip
+		fi
+		$p7z a -tzip -mx5 $signature2.zip config system META-INF 2>/dev/null >> $logs/zip.log
+		rm -rf $romdir/META-INF
+		if [[ -d $romdir/META-INF1 ]]; then
+			mv $romdir/META-INF1 $romdir/META-INF
+		fi
+	}
 	timestamp=$(date +%m-%d-%Y-%H:%M:%S)
 	ready=""
 	isframe=""
@@ -868,6 +878,12 @@ build_custom_zip() {
 		cd $prfiles
 		get_sig
 		banner
+		echo -e "$t_cust_deldir_q"
+		read -n 1 -p '' reply
+		if [[ $reply != "y" ]]; then
+			deldir="no"
+		fi
+		banner
 		echo "$bluet$t_cust_meta_prep$normal"
 		if [[ -d $romdir/META-INF ]]; then
 			mv $romdir/META-INF $romdir/META-INF1
@@ -887,6 +903,10 @@ build_custom_zip() {
 			assert_devices
 		else
 			sed -i '/#ASSERT/ r assert' $usdir/updater-script
+		fi
+		if [[ $deldir = "no" ]]; then
+			grep -v "delete_recursive\|Deleting" $usdir/updater-script > $usdir/updater-script2
+			mv $usdir/updater-script2 $usdir/updater-script
 		fi
 		grep -v "#ASSERT" $usdir/updater-script > $usdir/updater-script2
 		mv $usdir/updater-script2 $usdir/updater-script
@@ -960,14 +980,17 @@ build_custom_zip() {
 				grep -v "\"/system/lib\"\|\"/system/lib64\"\|\"/system/media\"" updater-script > updater-script2
 				mv updater-script2 updater-script
 				cd $romdir
-				if [[ -f $signature2.zip ]]; then
-					mv $signature2.zip ${signature2}_$timestamp.zip
-				fi
-				$p7z a -tzip -mx5 $signature2.zip config $sysdir/app $sysdir/framework $sysdir/priv-app META-INF 2>/dev/null >> $logs/zip.log
-				rm -rf $romdir/META-INF
-				if [[ -d $romdir/META-INF1 ]]; then
-					mv $romdir/META-INF1 $romdir/META-INF
-				fi
+				mv system system1
+				mkdir system
+				mv system1/app system/
+				mv system1/framework system/
+				mv system1/priv-app system/
+				docustzip
+				mv system/app system1/
+				mv system/framework system1/
+				mv system/priv-app system1/
+				rm -rf system
+				mv system1 system
 			else
 				rm -rf $romdir/META-INF
 				if [[ -d $romdir/META-INF1 ]]; then
@@ -994,14 +1017,21 @@ build_custom_zip() {
 				fi
 				mv updater-script2 updater-script
 				cd $romdir
-				if [[ -f $signature2.zip ]]; then
-					mv $signature2.zip ${signature2}_$timestamp.zip
-				fi
-				$p7z a -tzip -mx5 $signature2.zip config $sysdir/app $sysdir/framework $sysdir/lib $sysdir/lib64 $sysdir/priv-app META-INF 2>/dev/null >> $logs/zip.log
-				rm -rf $romdir/META-INF
-				if [[ -d $romdir/META-INF1 ]]; then
-					mv $romdir/META-INF1 $romdir/META-INF
-				fi
+				mv system system1
+				mkdir system
+				mv system1/app system/
+				mv system1/framework system/
+				mv system1/priv-app system/
+				mv system1/lib system/
+				mv system1/lib64 system/ 2>/dev/null
+				docustzip
+				mv system/app system1/
+				mv system/framework system1/
+				mv system/priv-app system1/
+				mv system/lib system1/
+				mv system/lib64 system1/ 2>/dev/null
+				rm -rf system
+				mv system1 system
 			else
 				rm -rf $romdir/META-INF
 				if [[ -d $romdir/META-INF1 ]]; then
@@ -1024,14 +1054,13 @@ build_custom_zip() {
 				grep -v "\"/system/app\"\|\"/system/lib\"\|\"/system/lib64\"\|\"/system/media\"\|\"/system/priv-app\"" updater-script > updater-script2
 				mv updater-script2 updater-script
 				cd $romdir
-				if [[ -f $signature2.zip ]]; then
-					mv $signature2.zip ${signature2}_$timestamp.zip
-				fi
-				$p7z a -tzip -mx5 $signature2.zip config $sysdir/framework META-INF 2>/dev/null >> $logs/zip.log
-				rm -rf $romdir/META-INF
-				if [[ -d $romdir/META-INF1 ]]; then
-					mv $romdir/META-INF1 $romdir/META-INF
-				fi
+				mv system system1
+				mkdir system
+				mv system1/framework system/
+				ducustzip
+				mv system/framework system1/
+				rm -rf system
+				mv system1 system
 			else
 				rm -rf $romdir/META-INF
 				if [[ -d $romdir/META-INF1 ]]; then
@@ -1054,14 +1083,15 @@ build_custom_zip() {
 				grep -v "\"/system/framework\"\|\"/system/lib\"\|\"/system/lib64\"\|\"/system/media\"" updater-script > updater-script2
 				mv updater-script2 updater-script
 				cd $romdir
-				if [[ -f $signature2.zip ]]; then
-					mv $signature2.zip ${signature2}_$timestamp.zip
-				fi
-				$p7z a -tzip -mx5 $signature2.zip config $sysdir/app $sysdir/priv-app META-INF 2>/dev/null >> $logs/zip.log
-				rm -rf $romdir/META-INF
-				if [[ -d $romdir/META-INF1 ]]; then
-					mv $romdir/META-INF1 $romdir/META-INF
-				fi
+				mv system system1
+				mkdir system
+				mv system1/app system/
+				mv system1/priv-app system/
+				docustzip
+				mv system/app system1/
+				mv system/priv-app system1/
+				rm -rf system
+				mv system1 system
 			else
 				rm -rf $romdir/META-INF
 				if [[ -d $romdir/META-INF1 ]]; then
@@ -1088,14 +1118,15 @@ build_custom_zip() {
 				fi
 				mv updater-script2 updater-script
 				cd $romdir
-				if [[ -f $signature2.zip ]]; then
-					mv $signature2.zip ${signature2}_$timestamp.zip
-				fi
-				$p7z a -tzip -mx5 $signature2.zip config $sysdir/lib META-INF 2>/dev/null >> $logs/zip.log
-				rm -rf $romdir/META-INF
-				if [[ -d $romdir/META-INF1 ]]; then
-					mv $romdir/META-INF1 $romdir/META-INF
-				fi
+				mv system system1
+				mkdir system
+				mv system1/lib system/
+				mv system1/lib64 system/ 2>/dev/null
+				docustzip
+				mv system/lib system1/
+				mv system/lib64 system1/ 2>/dev/null
+				rm -rf system
+				mv system1 system
 			else
 				rm -rf $romdir/META-INF
 				if [[ -d $romdir/META-INF1 ]]; then
@@ -1118,14 +1149,13 @@ build_custom_zip() {
 				grep -v "\"/system/app\"\|\"/system/framework\"\|\"/system/lib\"\|\"/system/lib64\"\|\"/system/priv-app\"" updater-script > updater-script2
 				mv updater-script2 updater-script
 				cd $romdir
-				if [[ -f $signature2.zip ]]; then
-					mv $signature2.zip ${signature2}_$timestamp.zip
-				fi
-				$p7z a -tzip -mx5 $signature2.zip config $sysdir/media META-INF 2>/dev/null >> $logs/zip.log
-				rm -rf $romdir/META-INF
-				if [[ -d $romdir/META-INF1 ]]; then
-					mv $romdir/META-INF1 $romdir/META-INF
-				fi
+				mv system system1
+				mkdir system
+				mv system1/media system/
+				docustzip
+				mv system/media system1/
+				rm -rf system
+				mv system1 system
 			else
 				rm -rf $romdir/META-INF
 				if [[ -d $romdir/META-INF1 ]]; then
@@ -4479,7 +4509,7 @@ extract_new() {
 	romchunk=""
 	romimg=""
 	romwin=""
-	find . -maxdepth 1 -type f | grep ".tgz\|.zip$\|.tar$\|.tar.a$\|.tar.md5$\|.win\|chunk\|.img$\|system.ext4$\|system.img.ext4" | grep -v "boot\|recovery" | sed 's/^\.\///' > $prfiles/findextract
+	find . -maxdepth 1 -type f | grep ".tgz$\|.zip$\|.tar$\|.tar.a$\|.tar.md5$\|.win\|chunk\|.img$\|system.ext4$\|system.img.ext4" | grep -v "boot\.img\|recovery\.img" | sed 's/^\.\///' > $prfiles/findextract
 	if [[ ! $(cat $prfiles/findextract | wc -l) -gt "1" ]]; then
 		if [[ ! $(grep *-*-factory-*.tgz $prfiles/findextract) = "" || ! $(grep *-*-factory-*.zip $prfiles/findextract) = "" || ! $(grep *-*-preview-*.tgz $prfiles/findextract) = "" || ! $(grep *-*-preview-*.zip $prfiles/findextract) = "" ]]; then
 			romtgz=$(cat $prfiles/findextract)
@@ -4616,6 +4646,9 @@ extract_new() {
 				mkdir -p $deviceloc
 				if [[ ! -f $deviceloc/superr_byname ]]; then
 					byname1=$($adb shell "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
+					if [[ $byname1 = "" ]]; then
+						byname1=$($adb shell su -c "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
+					fi
 					amnt=$($adb shell "mount")
 					if [[ ! $(echo "$amnt" | grep "/SYSTEM") = "" ]]; then
 						touch $deviceloc/superr_capbyname
@@ -4661,7 +4694,10 @@ extract_new() {
 				rm -rf $romdir/build.prop
 				mkdir -p $deviceloc
 				if [[ ! -f $deviceloc/superr_byname ]]; then
-					byname1=$($adb shell su -c "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
+					byname1=$($adb shell "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
+					if [[ $byname1 = "" ]]; then
+						byname1=$($adb shell su -c "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
+					fi
 					amnt=$($adb shell "mount")
 					if [[ ! $(echo "$amnt" | grep "/SYSTEM") = "" ]]; then
 						touch $deviceloc/superr_capbyname
@@ -5340,7 +5376,6 @@ get_byname() {
 			echo "$devicename" > $deviceloc/devicename
 			byname1=$($adb shell "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
 			if [[ $byname1 = "" ]]; then
-				$adb "wait-for-device"
 				byname1=$($adb shell su -c "find /dev -name by-name 2>/dev/null" | grep -m 1 "")
 			fi
 			if [[ $byname1 = "" ]]; then
@@ -6708,13 +6743,13 @@ part_setup() {
 		sed -i "s:file_getprop(\"\/tmp\/config\",\ \"byname\")\ +\ \"\/system\"\ +\ file_getprop(\"\/tmp\/config\",\ \"slotnum\"):\"$mmcsystem\":g" $usdir/updater-script
 	else
 		if [[ -f $deviceloc/superr_capbyname ]]; then
-			sed -i "s/\"\/system\",/\"\/SYSTEM\",/g" $usdir/updater-script
-			sed -i "s/\"\/boot\",/\"\/BOOT\",/g" $usdir/updater-script
-			sed -i "s/\"\/recovery\",/\"\/RECOVERY\",/g" $usdir/updater-script
+			sed -i "s/+\ \"\/system\"\ +/+\ \"\/SYSTEM\"\ +/g" $usdir/updater-script
+			sed -i "s/+\ \"\/boot\"\ +/+\ \"\/BOOT\"\ +/g" $usdir/updater-script
+			sed -i "s/+\ \"\/recovery\"\ +/+\ \"\/RECOVERY\"\ +/g" $usdir/updater-script
 		elif [[ -f $deviceloc/superr_appbyname ]]; then
-			sed -i "s/\"\/system\",/\"\/APP\",/g" $usdir/updater-script
-			sed -i "s/\"\/boot\",/\"\/LNX\",/g" $usdir/updater-script
-			sed -i "s/\"\/recovery\",/\"\/SOS\",/g" $usdir/updater-script
+			sed -i "s/+\ \"\/system\"\ +/+\ \"\/APP\"\ +/g" $usdir/updater-script
+			sed -i "s/+\ \"\/boot\"\ +/+\ \"\/LNX\"\ +/g" $usdir/updater-script
+			sed -i "s/+\ \"\/recovery\"\ +/+\ \"\/SOS\"\ +/g" $usdir/updater-script
 		elif [[ -f $romdir/system/default.prop ]]; then
 			grep -v "boot.img\|boot\ image" $usdir/updater-script > $usdir/updater-script2
 			mv $usdir/updater-script2 $usdir/updater-script
@@ -6722,13 +6757,21 @@ part_setup() {
 	fi
 }
 pullimga() {
+	sdcard=$($adb shell su -c "df -h /sdcard 2>/dev/null" | grep "/" | gawk '{ print $4 }')
+	if [[ ! $sdcard ]]; then
+		sdcard="${redt}N/A$normal"
+	fi
+	sdcard1=$($adb shell su -c "df -h /storage/sdcard1 2>/dev/null" | grep "/" | gawk '{ print $4 }')
+	if [[ ! $sdcard1 ]]; then
+		sdcard1="${redt}N/A$normal"
+	fi
 	choice=""
 	while [[ ! $choice =~ ^[1-3]$ ]]; do
 		banner
 		echo -e "$t_pullimg_info"
 		echo ""
-		echo "1) /sdcard ($bluet$t_extract_free_space$greent$($adb shell su -c "df -h /sdcard 2>/dev/null" | grep "/" | gawk '{ print $4 }')$normal)"
-		echo "2) /storage/sdcard1 ($bluet$t_extract_free_space$greent$($adb shell su -c "df -h /storage/sdcard1 2>/dev/null" | grep "/" | gawk '{ print $4 }')$normal)"
+		echo "1) /sdcard ($bluet$t_extract_free_space$greent$sdcard$normal)"
+		echo "2) /storage/sdcard1 ($bluet$t_extract_free_space$greent$sdcard1$normal)"
 		echo "3) $t_extract_manual"
 		echo ""
 		read -n 1 -p "$t_select" choice
