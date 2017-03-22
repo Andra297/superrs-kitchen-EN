@@ -7,8 +7,8 @@
 /tools/root/root_zips/*
 !/tools/root/root_zips/SuperSU-v2.79-SR3.zip
 /tools/smali/current/*
-!/tools/smali/current/smali-2.2b4-1a83d5a2.jar
-!/tools/smali/current/baksmali-2.2b4-1a83d5a2.jar
+!/tools/smali/current/smali-2.2b4-cd1e5c50.jar
+!/tools/smali/current/baksmali-2.2b4-cd1e5c50.jar
 !/tools/smali/current/oat2dex-a2dc9ce1.jar
 /tools/*srk-chosen
 /tools/language/*

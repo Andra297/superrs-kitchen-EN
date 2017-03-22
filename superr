@@ -2250,7 +2250,8 @@ deodex_start() {
 		return 1
 	elif [[ $api -eq 21 || $api -eq 22 ]]; then
 		choose_oat2dex
-		deodex_l
+		dtype="l"
+		deodex
 		return 1
 	elif [[ $api -eq 23 && ! $androidversion = "N" ]]; then
 		choice=""
@@ -2271,7 +2272,8 @@ deodex_start() {
 		# START M oat2dex
 		if [[ $choice = "1" ]]; then
 			choose_oat2dex
-			deodex_m
+			dtype="m"
+			deodex
 		# START M smali/baksmali
 		elif [[ $choice = "2" ]]; then
 			jarname="smali"
@@ -2283,8 +2285,8 @@ deodex_start() {
 			jartitle="$t_title_cho_baksmali"
 			choose_jartitle
 			baksmali="$thecho"
-
-			deodex_m2
+			dtype="m2"
+			deodex
 		# START M oatdump
 		elif [[ $choice = "3" ]]; then
 			if [[ ! $(getconf LONG_BIT) = "64" ]]; then
@@ -2328,7 +2330,8 @@ deodex_start() {
 				fi
 			fi
 			oattools="$base/tools/oattools_m/bin"
-			deodex_m3
+			dtype="m3"
+			deodex
 			return 1
 		fi
 		return 1
@@ -2358,8 +2361,8 @@ deodex_start() {
 			jartitle="$t_title_cho_baksmali"
 			choose_jartitle
 			baksmali="$thecho"
-
-			deodex_n2
+			dtype="n2"
+			deodex
 		# START N oatdump
 		elif [[ $choice = "2" ]]; then
 			if [[ ! $(getconf LONG_BIT) = "64" ]]; then
@@ -2406,7 +2409,8 @@ deodex_start() {
 				fi
 			fi
 			oattools="$base/tools/oattools_n/bin"
-			deodex_n
+			dtype="n"
+			deodex
 			return 1
 		fi
 	else
@@ -2417,27 +2421,24 @@ deodex_start() {
 		exit_deo
 	fi
 }
-deodex_l() {
+deodex() {
 	arch=""
 	arch2=""
-	armtest=$(find $framedir -type d | grep -m 1 -o arm$)
-	arm64test=$(find $framedir -type d | grep -m 1 -o arm64$)
-	x86test=$(find $framedir -type d | grep -m 1 -o x86$)
-	x86_64test=$(find $framedir -type d | grep -m 1 -o x86_64$)
-	if [[ $arm64test = "arm64" && -f $framedir/arm64/boot.oat ]]; then
-		arch="arm64"
-		if [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-			arch2="arm"
+	archtmp="arm64 x86_64 arm x86"
+	for i in $archtmp; do
+		archtest=$(find $framedir -type d 2>/dev/null | grep -m 1 -o "$i$")
+		if [[ $archtest != "" ]]; then
+			break
 		fi
-	elif [[ $x86_64test = "x86_64" && -f $framedir/x86_64/boot.oat ]]; then
-		arch="x86_64"
-		if [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-			arch2="x86"
+	done
+	if [[ $(echo "$archtest" | grep "64") != "" ]]; then
+		arch2test=$(echo "$archtest" | sed 's/_64//; s/64$//')
+	fi
+	if [[ $archtest != "" && -f $framedir/$archtest/boot.oat ]]; then
+		arch="$archtest"
+		if [[ $arch2test != "" && -f $framedir/$arch2test/boot.oat ]]; then
+			arch2="$arch2test"
 		fi
-	elif [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-		arch="arm"
-	elif [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-		arch="x86"
 	else
 		while [[ ! -f $framedir/$arch/boot.oat ]]; do
 			banner
@@ -2452,13 +2453,20 @@ deodex_l() {
 		echo "$bluet$t_startup_version $greent$androidversion"
 		echo "$bluet$t_deodex_api$greent$api"
 		echo "$bluet$t_deodex_arch$greent$arch$normal"
-		if [[ ! $arch2 = "" ]]; then
+		if [[ $arch2 != "" ]]; then
 			echo "$bluet$t_deodex_arch2$greent$arch2$normal"
 		fi
-		echo -e "$bluet$t_deodex_method${greent}\t$(basename $oat2dex)$normal"
+		if [[ $dtype = "m2" || $dtype = "n2" ]]; then
+			echo -e "$bluet$t_deodex_method${greent}\t$(basename $smali)"
+			echo -e "\t$(basename $baksmali)$normal"
+		elif [[ $dtype = "n" || $dtype = "m3" ]]; then
+			echo "$bluet$t_deodex_method ${greent}oatdump$normal"
+		elif [[ $dtype = "l" || $dtype = "m" ]]; then
+			echo -e "$bluet$t_deodex_method${greent}\t$(basename $oat2dex)$normal"
+		fi
 		echo ""
-		read -n 1 -p "$t_deodex_continue_q"
-		if [[ ! $REPLY = "y" ]]; then
+		read -n 1 -p "$t_deodex_continue_q" reply
+		if [[ $reply != "y" ]]; then
 			rom_tools
 			return 1
 		fi
@@ -2468,7 +2476,7 @@ deodex_l() {
 		echo "$redt$t_error_mess$normal"
 		exit_deo
 	fi
-	dodeodexl() {
+	dodeodex() {
 		app=""
 		for app in $(echo "$applist"); do
 			if [[ ! -d $deoappdir/$app/$deoarch ]]; then
@@ -2478,31 +2486,75 @@ deodex_l() {
 				echo ""
 				echo "$t_deodex_deodexing $app"
 				echo ""
-				java -Xmx${heapsize}m -jar $oat2dex $deoappdir/$app/$deoarch/$app.odex $framedir/$deoarch2/odex >> $logs/deodex.log
-				if [[ ! -f $deoappdir/$app/$deoarch/$app.dex ]]; then
-					rm -rf $deoappdir/$app/$deoarch/$app-classes*.dex
-					continue
+				if [[ $dtype = "m2" || $dtype = "n2" ]]; then
+					classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $deoappdir/$app/$deoarch/$app.odex 2>&1)
+					echo "$classes" >> $logs/deodex.log
+					echo "$classes" | while read line; do
+						apkdex=$(basename $(echo "$line"))
+						if [[ $(echo "$apkdex" | grep classes) = "" ]]; then
+							dexclass="classes.dex"
+						else
+							dexclass=$(echo "$apkdex" | cut -d":" -f2-)
+						fi
+						java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $deoappdir/$app/$deoarch/$app.odex/$apkdex -o $deoappdir/$app/$deoarch/smali >> $logs/deodex.log
+						java -Xmx${heapsize}m -jar $smali assemble $deoappdir/$app/$deoarch/smali -o $deoappdir/$app/$deoarch/$dexclass >> $logs/deodex.log
+						rm -rf $deoappdir/$app/$deoarch/smali
+						if [[ ! -f $deoappdir/$app/$deoarch/$dexclass ]]; then
+							echo "$deoappdir/$app/$deoarch/$dexclass" >> $logs/deodex_fail_list
+							continue
+						fi
+					done
+				elif [[ $dtype = "m3" || $dtype = "n" ]]; then
+					$oattools/oatdump --oat-file="$deoappdir/$app/$deoarch/$app.odex" --export-dex-to="$deoappdir/$app/$deoarch" >> $logs/deodex.log
+					$oattools/dexrepair -I $deoappdir/$app/$deoarch >> $logs/deodex.log
+					if [[ ! -f $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex ]]; then
+						echo "${redt}${app} $t_deodex_fail$normal"
+						echo "$deoappdir/$app/$deoarch/$app.odex" >> $logs/deodex_fail_list
+						rm -rf $deoappdir/$app/$deoarch/$app.apk:classes*.dex_export.dex_repaired.dex
+						continue
+					fi
+					mv $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex $deoappdir/$app/$deoarch/classes.dex
+					find $deoappdir/$app/$deoarch -name $app.apk:classes*.dex_export.dex_repaired.dex | while read line; do
+						appclassdex=$(basename $line)
+						appclassdir=$(dirname $line)
+						classname=$(echo "$appclassdex" | cut -d":" -f2 | cut -d"_" -f1)
+						mv $line $appclassdir/$classname
+					done
+				elif [[ $dtype = "m" || $dtype = "l" ]]; then
+					java -Xmx${heapsize}m -jar $oat2dex $deoappdir/$app/$deoarch/$app.odex $framedir/$deoarch2/odex >> $logs/deodex.log
+					if [[ ! -f $deoappdir/$app/$deoarch/$app.dex ]]; then
+						rm -rf $deoappdir/$app/$deoarch/$app-classes*.dex
+						continue
+					fi
+					mv $deoappdir/$app/$deoarch/$app.dex $deoappdir/$app/$deoarch/classes.dex
+					find $deoappdir/$app/$deoarch -name $app-classes*.dex | while read line; do
+						appclassdex=$(basename $line)
+						appclassdir=$(dirname $line)
+						classname=$(echo "$appclassdex" | cut -d"-" -f2)
+						mv $line $appclassdir/$classname
+					done
 				fi
-				mv $deoappdir/$app/$deoarch/$app.dex $deoappdir/$app/$deoarch/classes.dex
-				find $deoappdir/$app/$deoarch -name $app-classes*.dex | while read line; do
-					appclassdex=$(basename $line)
-					appclassdir=$(dirname $line)
-					classname=$(echo "$appclassdex" | cut -d"-" -f2)
-					mv $line $appclassdir/$classname
-				done
 				$aapt add -fk $deoappdir/$app/$app.apk $deoappdir/$app/$deoarch/classes*.dex >> $logs/zip.log
-				rm -rf $deoappdir/$app/$deoarch
+				if [[ $dtype = "l" ]]; then
+					rm -rf $deoappdir/$app/$deoarch
+				else
+					rm -rf $deoappdir/$app/oat
+				fi
 			else
 				echo ""
 				echo "$greent$app $t_deodex_app_already$normal"
 				echo ""
-				rm -rf $deoappdir/$app/$deoarch
+				if [[ $dtype != "l" ]]; then
+					rm -rf $deoappdir/$app/oat
+				else
+					rm -rf $deoappdir/$app/$deoarch
+				fi
 			fi
 		done
 	}
 	rm -rf $prfiles/deodex_*
-	touch $prfiles/deodex_l
-	rm -rf $logs/*.log
+	touch $prfiles/deodex_$dtype
+	rm -rf $logs/*.log $logs/deodex_fail_list
 	if [[ ! $(find $appdir $privdir $framedir -name *odex.* 2>/dev/null | grep ".gz\|.xz") = "" ]]; then
 		echo "$clears"
 		echo ""
@@ -2527,14 +2579,19 @@ deodex_l() {
 			$p7z e -o$xzdir $line 2>/dev/null >> $logs/zip.log
 		done
 	fi
-	if [[ -d $sysdir/app && ! $(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/") = "" ]]; then
+	if [[ $dtype != "l" ]]; then
+		odextmp=$(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u)
+	else
+		odextmp=$(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f3- | rev | sort -u)
+	fi
+	if [[ -d $sysdir/app && $odextmp != "" ]]; then
 		echo "$clears"
 		echo ""
 		echo "----------------------------------------------------"
 		echo "$t_deodex_move"
 		echo "----------------------------------------------------"
 		echo ""
-		find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f3- | rev | sort -u > $logs/extraodex.txt
+		echo "$odextmp" > $logs/extraodex.txt
 		if [[ -s $logs/extraodex.txt ]]; then
 			extraapp=""
 			line=""
@@ -2554,18 +2611,20 @@ deodex_l() {
 			done
 		fi
 	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_deop"
-	echo "----------------------------------------------------"
-	echo ""
-	if [[ ! -d "$framedir/$arch/odex" ]]; then
-		java -Xmx${heapsize}m -jar $oat2dex boot $framedir/$arch/boot.oat >> $logs/deodex.log
-	fi
-	if [[ ! $arch2 = "" ]]; then
-		if [[ ! -d "$framedir/$arch2/odex" ]]; then
-			java -Xmx${heapsize}m -jar $oat2dex boot $framedir/$arch2/boot.oat >> $logs/deodex.log
+	if [[ $dtype = "l" || $dtype = "m" ]]; then
+		echo "$clears"
+		echo ""
+		echo "----------------------------------------------------"
+		echo "$t_deodex_deop"
+		echo "----------------------------------------------------"
+		echo ""
+		if [[ ! -d "$framedir/$arch/odex" ]]; then
+			java -Xmx${heapsize}m -jar $oat2dex boot $framedir/$arch/boot.oat >> $logs/deodex.log
+		fi
+		if [[ ! $arch2 = "" ]]; then
+			if [[ ! -d "$framedir/$arch2/odex" ]]; then
+				java -Xmx${heapsize}m -jar $oat2dex boot $framedir/$arch2/boot.oat >> $logs/deodex.log
+			fi
 		fi
 	fi
 	echo "$clears"
@@ -2577,58 +2636,94 @@ deodex_l() {
 	applist=$(ls $appdir)
 	app=""
 	for app in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $appdir/$app/$arch && -d $appdir/$app/$arch2 ]]; then
-			rm -rf $appdir/$app/$arch2
+		if [[ $dtype = "l" ]]; then
+			if [[ ! $arch2 = "" && -d $appdir/$app/$arch && -d $appdir/$app/$arch2 ]]; then
+				rm -rf $appdir/$app/$arch2
+			fi
+		else
+			if [[ ! $arch2 = "" && -d $appdir/$app/oat/$arch && -d $appdir/$app/oat/$arch2 ]]; then
+				rm -rf $appdir/$app/oat/$arch2
+			fi
 		fi
 	done
 	deoappdir="$appdir"
-	deoarch="$arch"
-	deoarch2="$arch"
-	dodeodexl
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="$arch2"
-		deoarch2="$arch2"
-		dodeodexl
-	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		line=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
+	if [[ $dtype != "l" ]]; then
+		deoarch="oat/$arch"
+		deoarch2="$arch"
+		dodeodex
+		if [[ ! $arch2 = "" ]]; then
+			deoarch="oat/$arch2"
+			deoarch2="$arch2"
+			dodeodex
 		fi
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_priv"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $privdir)
-	privapp=""
-	for privapp in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $privdir/$privapp/$arch && -d $privdir/$privapp/$arch2 ]]; then
-			rm -rf $privdir/$privapp/$arch2
-		fi
-	done
-	deoappdir="$privdir"
-	deoarch="$arch"
-	deoarch2="$arch"
-	dodeodexl
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="$arch2"
-		deoarch2="$arch2"
-		dodeodexl
+	else
 		deoarch="$arch"
 		deoarch2="$arch"
+		dodeodex
+		if [[ ! $arch2 = "" ]]; then
+			deoarch="$arch2"
+			deoarch2="$arch2"
+			dodeodex
+		fi
+	fi
+	if [[ -s $logs/extraodex.txt ]]; then
+		extraapp=""
+		line=""
+		cat $logs/extraodex.txt | while read line; do
+			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
+			mv $sysdir/app/$extraapp $romdir/$line
+		done
+		line=""
+		if [[ -s $logs/extramv.txt ]]; then
+			cat $logs/extramv.txt | while read line; do
+				mv $line
+			done
+		fi
+	fi
+	rm -rf $logs/extraodex.txt
+	rm -rf $logs/extramv.txt
+	echo "$clears"
+	echo ""
+	echo "----------------------------------------------------"
+	echo "$t_deodex_start_priv"
+	echo "----------------------------------------------------"
+	echo ""
+	applist=$(ls $privdir)
+	privapp=""
+	for privapp in $(echo "$applist"); do
+		if [[ $dtype != "l" ]]; then
+			if [[ ! $arch2 = "" && -d $privdir/$privapp/oat/$arch && -d $privdir/$privapp/oat/$arch2 ]]; then
+				rm -rf $privdir/$privapp/oat/$arch2
+			fi
+		else
+			if [[ ! $arch2 = "" && -d $privdir/$privapp/$arch && -d $privdir/$privapp/$arch2 ]]; then
+				rm -rf $privdir/$privapp/$arch2
+			fi
+		fi
+	done
+	deoappdir="$privdir"
+	if [[ $dtype != "l" ]]; then
+		deoarch="oat/$arch"
+		deoarch2="$arch"
+		dodeodex
+		if [[ ! $arch2 = "" ]]; then
+			deoarch="oat/$arch2"
+			deoarch2="$arch2"
+			dodeodex
+			deoarch="oat/$arch"
+			deoarch2="$arch"
+		fi
+	else
+		deoarch="$arch"
+		deoarch2="$arch"
+		dodeodex
+		if [[ ! $arch2 = "" ]]; then
+			deoarch="$arch2"
+			deoarch2="$arch2"
+			dodeodex
+			deoarch="$arch"
+			deoarch2="$arch"
+		fi
 	fi
 	echo "$clears"
 	echo ""
@@ -2636,25 +2731,166 @@ deodex_l() {
 	echo "$t_deodex_start_frame"
 	echo "----------------------------------------------------"
 	echo ""
-	if [[ -d $framedir/$deoarch ]]; then
-		for frame in $(ls $framedir/$deoarch | grep .odex$ | sort); do
+	if [[ $dtype = "n2" || $dtype = "m2" ]]; then
+		if [[ $dtype = "n2" ]]; then
+			ls $framedir/$deoarch2 | grep .oat$ | sort | while read line; do
+				if [[ ! $line = "boot.oat" ]]; then
+					framejar=$(echo "$(echo "$line" | sed 's/^boot-//; s/\.oat$//').jar")
+					if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
+						echo ""
+						echo "$greent$frame $t_deodex_app_already$normal"
+						echo ""
+						continue
+					fi
+				fi
+				echo ""
+				echo "$t_deodex_deodexing $line"
+				echo ""
+				classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch2/$line | rev | cut -d"/" -f1 | rev)
+				echo "$classes" >> $logs/deodex.log
+				echo "$classes" | while read line2; do
+					if [[ $(echo "$line2" | grep classes) = "" ]]; then
+						line3=$(echo "$line2" | rev | cut -d"." -f2- | rev)
+						dexclass="classes.dex"
+					else
+						line3=$(echo "$line2" | rev | cut -d"." -f3- | rev)
+						dexclass=$(echo "$line2" | cut -d":" -f2-)
+					fi
+					java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch2/$line/$line2 -o $framedir/$deoarch2/smali >> $logs/deodex.log
+					java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch2/smali -o $framedir/$line3.jar:$dexclass >> $logs/deodex.log
+					rm -rf $framedir/$deoarch2/smali
+				done
+			done
+		elif [[ $dtype = "m2" ]]; then
+			classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch2/boot.oat | rev | cut -d"/" -f1 | rev)
+			line=""
+			for line in $(echo "$classes"); do
+				if [[ $(echo "$line" | grep classes) = "" ]]; then
+					framejar="$line"
+					dexclass=":classes.dex"
+				else
+					framejar=$(echo "$line" | cut -d":" -f1)
+					dexclass=""
+				fi
+				if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
+					echo ""
+					echo "$greent$frame $t_deodex_app_already$normal"
+					echo ""
+					continue
+				fi
+				line2=$(echo "$line" | rev | cut -d"." -f2- | rev)
+				echo ""
+				echo "$t_deodex_deodexing $line2"
+				echo ""
+				java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch2/boot.oat/$line -o $framedir/smali >> $logs/deodex.log
+				java -Xmx${heapsize}m -jar $smali assemble $framedir/smali -o $framedir/$line$dexclass >> $logs/deodex.log
+				rm -rf $framedir/smali
+			done
+		fi
+		if [[ -d $framedir/$deoarch ]]; then
+			frame=""
+			for frame in $(ls $framedir/$deoarch | grep .odex$ | sort); do
+				framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
+				if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
+					echo ""
+					echo "$greent$frame $t_deodex_app_already$normal"
+					echo ""
+					continue
+				fi
+				echo ""
+				echo "$t_deodex_deodexing $frame"
+				echo ""
+				classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch/$frame)
+				echo "$classes" >> $logs/deodex.log
+				echo "$classes" | while read line; do
+					apkdex=$(basename $(echo "$line"))
+					if [[ $(echo "$apkdex" | grep classes) = "" ]]; then
+						dexclass="$apkdex:classes.dex"
+					else
+						dexclass="$apkdex"
+					fi
+					java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch/$frame/$apkdex -o $framedir/$deoarch/smali >> $logs/deodex.log
+					java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch/smali -o $framedir/$dexclass >> $logs/deodex.log
+					rm -rf $framedir/$deoarch/smali
+				done
+			done
+		fi
+	elif [[ $dtype = "l" || $dtype = "m" ]]; then
+		if [[ -d $framedir/$deoarch ]]; then
+			for frame in $(ls $framedir/$deoarch | grep .odex$ | sort); do
+				echo ""
+				echo "$t_deodex_deodexing $frame"
+				echo ""
+				errtest=$(echo "$frame" | rev | cut -d"." -f2- | rev)
+				java -Xmx${heapsize}m -jar $oat2dex $framedir/$deoarch/$frame $framedir/$deoarch2/odex >> $logs/deodex.log
+			done
+		fi
+		mv $framedir/$deoarch2/dex/* $framedir/$deoarch/
+		ls $framedir/$deoarch | grep "\.dex$" | while read line; do
+			if [[ $(echo "$line" | grep classes) = "" ]]; then
+				frame=$(echo "$(echo "$line" | sed 's/\.dex//').jar:classes.dex")
+			else
+				dexclass=$(echo "$line" | rev | cut -d"-" -f1 | rev)
+				frame=$(echo "$(echo "$line" | sed "s/-$dexclass//").jar:$dexclass")
+			fi
+			mv $framedir/$deoarch/$line $framedir/$frame
+		done
+	else
+		mkdir -p $framedir/temp
+		for frame in $(ls $framedir/$deoarch2 | grep .oat$); do
+			if [[ $dtype = "n" ]]; then
+				if [[ ! $frame = "boot.oat" ]]; then
+					framejar=$(echo "$(echo "$frame" | sed 's/^boot-//; s/\.oat$//').jar")
+					if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
+						echo ""
+						echo "$greent$frame $t_deodex_app_already$normal"
+						echo ""
+						continue
+					fi
+				fi
+			fi
 			echo ""
 			echo "$t_deodex_deodexing $frame"
 			echo ""
-			errtest=$(echo "$frame" | rev | cut -d"." -f2- | rev)
-			java -Xmx${heapsize}m -jar $oat2dex $framedir/$deoarch/$frame $framedir/$deoarch2/odex >> $logs/deodex.log
+			$oattools/oatdump --oat-file="$framedir/$deoarch2/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
+		done
+		if [[ -d $framedir/$deoarch ]]; then
+			for frame in $(ls $framedir/$deoarch | grep .odex$); do
+				framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
+				if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
+					echo ""
+					echo "$greent$frame $t_deodex_app_already$normal"
+					echo ""
+					continue
+				fi
+				echo ""
+				echo "$t_deodex_deodexing $frame"
+				echo ""
+				$oattools/oatdump --oat-file="$framedir/$deoarch/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
+			done
+		fi
+		if [[ $dtype = "m3" ]]; then
+			ls $framedir/temp | grep "export\.dex" | while read line; do
+				if [[ $(echo "$line" | grep classes) = "" ]]; then
+					framejar=$(echo "$line" | sed 's/_export\.dex//')
+				else
+					framejar=$(echo "$line" | cut -d":" -f1)
+				fi
+				if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
+					rm -rf $framedir/temp/$line
+				fi
+			done
+		fi
+		$oattools/dexrepair -I $framedir/temp >> $logs/deodex.log
+		ls $framedir/temp | grep "export.dex_repaired.dex" | while read line; do
+			if [[ $(echo "$line" | grep classes) = "" ]]; then
+				frame=$(echo "$(echo "$line" | sed 's/_export\.dex_repaired\.dex//'):classes.dex")
+			else
+				frame=$(echo "$line" | sed 's/_export\.dex_repaired\.dex//')
+			fi
+			mv $framedir/temp/$line $framedir/$frame
 		done
 	fi
-	mv $framedir/$deoarch2/dex/* $framedir/$deoarch/
-	ls $framedir/$deoarch | grep "\.dex$" | while read line; do
-		if [[ $(echo "$line" | grep classes) = "" ]]; then
-			frame=$(echo "$(echo "$line" | sed 's/\.dex//').jar:classes.dex")
-		else
-			dexclass=$(echo "$line" | rev | cut -d"-" -f1 | rev)
-			frame=$(echo "$(echo "$line" | sed "s/-$dexclass//").jar:$dexclass")
-		fi
-		mv $framedir/$deoarch/$line $framedir/$frame
-	done
 	banner
 	echo "$bluet$t_deodex_pack_jar$normal"
 	ls $framedir | grep "jar:classes.dex" | sort | while read line; do
@@ -2663,14 +2899,20 @@ deodex_l() {
 			line4=$(echo "$line3" | cut -d":" -f2)
 			mv $framedir/$line3 $framedir/$line4
 		done
-		$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
+		if [[ -f $framedir/classes.dex ]]; then
+			$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
+		else
+			echo "ERROR: $line2 has no classes.dex" >> $logs/deodex.log
+		fi
 		rm -rf $framedir/classes*.dex
 	done
-	rm -rf $framedir/$arch/odex
-	rm -rf $framedir/$arch/dex
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2/odex
-		rm -rf $framedir/$arch2/dex
+	if [[ $dtype = "l" || $dtype = "m" ]]; then
+		rm -rf $framedir/$arch/odex
+		rm -rf $framedir/$arch/dex
+		if [[ ! $arch2 = "" ]]; then
+			rm -rf $framedir/$arch2/odex
+			rm -rf $framedir/$arch2/dex
+		fi
 	fi
 	echo "$clears"
 	echo ""
@@ -2679,1507 +2921,34 @@ deodex_l() {
 	echo "----------------------------------------------------"
 	echo ""
 	echo ""
+	rm -rf $framedir/oat
 	rm -rf $framedir/$arch
 	if [[ ! $arch2 = "" ]]; then
 		rm -rf $framedir/$arch2
 	fi
-	deodex_fail_list=$(grep "convertToDex: skip" $logs/deodex.log | cut -d"/" -f2- | sort -u)
+
+	if [[ $dtype = "l" || $dtype = "m" ]]; then
+		deodex_fail_list=$(grep "convertToDex: skip" $logs/deodex.log | cut -d"/" -f2- | sort -u)
+	else
+		deodex_fail_list=$(cat $logs/deodex_fail_list 2>/dev/null)
+	fi
 	if [[ ! $deodex_fail_list = "" ]]; then
 		banner
 		echo -e "$t_deodex_problems"
 		echo "$yellowt$deodex_fail_list$normal"
+		if [[ $dtype = "m" ]]; then
+			echo ""
+			echo "$greent$t_deodex_try_smali$normal"
+		fi
 		echo ""
 		read -p "$t_enter_continue"
 	fi
 	cd $romdir
 	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
 	if [[ "$stillodexed" = "" ]]; then
-		banner
-		echo "$greent$t_deodex_complete$normal"
-		exit_deo
-	else
-		banner
-		echo "$redt$t_deodex_remain"
-		echo ""
-		echo "$yellowt$stillodexed$normal"
-		exit_deo
-	fi
-}
-deodex_m() {
-	arch=""
-	arch2=""
-	armtest=$(find $framedir -type d | grep -m 1 -o arm$)
-	arm64test=$(find $framedir -type d | grep -m 1 -o arm64$)
-	x86test=$(find $framedir -type d | grep -m 1 -o x86$)
-	x86_64test=$(find $framedir -type d | grep -m 1 -o x86_64$)
-	if [[ $arm64test = "arm64" && -f $framedir/arm64/boot.oat ]]; then
-		arch="arm64"
-		if [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-			arch2="arm"
+		if [[ $dtype = "n2" || $dtype = "n" ]]; then
+			delete_meta_inf
 		fi
-	elif [[ $x86_64test = "x86_64" && -f $framedir/x86_64/boot.oat ]]; then
-		arch="x86_64"
-		if [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-			arch2="x86"
-		fi
-	elif [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-		arch="arm"
-	elif [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-		arch="x86"
-	else
-		while [[ ! -f $framedir/$arch/boot.oat ]]; do
-			banner
-			echo -e "$t_deodex_config_arch"
-			echo ""
-			read arch
-		done
-	fi
-	if [[ -f $framedir/$arch/boot.oat ]]; then
-		banner
-		echo "${bluet}$t_startup_project $greent$romname"
-		echo "$bluet$t_startup_version $greent$androidversion"
-		echo "$bluet$t_deodex_api$greent$api"
-		echo "$bluet$t_deodex_arch$greent$arch$normal"
-		if [[ ! $arch2 = "" ]]; then
-			echo "$bluet$t_deodex_arch2$greent$arch2$normal"
-		fi
-		echo -e "$bluet$t_deodex_method${greent}\t$(basename $oat2dex)$normal"
-		echo ""
-		read -n 1 -p "$t_deodex_continue_q"
-		if [[ ! $REPLY = "y" ]]; then
-			rom_tools
-			return 1
-		fi
-	else
-		banner
-		echo "$redb$yellowt$bold$t_warning$normal"
-		echo "$redt$t_error_mess$normal"
-		exit_deo
-	fi
-	dodeodexm() {
-		app=""
-		for app in $(echo "$applist"); do
-			if [[ ! -d $deoappdir/$app/$deoarch ]]; then
-				continue
-			fi
-			if [[ $($p7z l $deoappdir/$app/$app.apk | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$t_deodex_deodexing $app"
-				echo ""
-				java -Xmx${heapsize}m -jar $oat2dex $deoappdir/$app/$deoarch/$app.odex $framedir/$deoarch2/odex >> $logs/deodex.log
-				if [[ ! -f $deoappdir/$app/$deoarch/$app.dex ]]; then
-					rm -rf $deoappdir/$app/$deoarch/$app-classes*.dex
-					continue
-				fi
-				mv $deoappdir/$app/$deoarch/$app.dex $deoappdir/$app/$deoarch/classes.dex
-				find $deoappdir/$app/$deoarch -name $app-classes*.dex | while read line; do
-					appclassdex=$(basename $line)
-					appclassdir=$(dirname $line)
-					classname=$(echo "$appclassdex" | cut -d"-" -f2)
-					mv $line $appclassdir/$classname
-				done
-				$aapt add -fk $deoappdir/$app/$app.apk $deoappdir/$app/$deoarch/classes*.dex >> $logs/zip.log
-				rm -rf $deoappdir/$app/oat
-			else
-				echo ""
-				echo "$greent$app $t_deodex_app_already$normal"
-				echo ""
-				rm -rf $deoappdir/$app/oat
-			fi
-		done
-	}
-	rm -rf $prfiles/deodex_* $logs/deodex_fail_list
-	touch $prfiles/deodex_m
-	rm -rf $logs/*.log
-	if [[ ! $(find $appdir $privdir $framedir -name *odex.* 2>/dev/null | grep ".gz\|.xz") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_extract_txt"
-		echo "----------------------------------------------------"
-		echo ""
-		find $appdir $privdir $framedir -name *odex.gz 2>/dev/null | while read line; do
-			gzdir=$(dirname $line)
-			gzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $gzfile"
-			echo ""
-			$p7z e -o$gzdir $line 2>/dev/null >> $logs/zip.log
-		done
-		find $appdir $privdir $framedir -name *odex.xz 2>/dev/null | while read line; do
-			xzdir=$(dirname $line)
-			xzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $xzfile"
-			echo ""
-			$p7z e -o$xzdir $line 2>/dev/null >> $logs/zip.log
-		done
-	fi
-	if [[ -d $sysdir/app && ! $(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_move"
-		echo "----------------------------------------------------"
-		echo ""
-		find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u > $logs/extraodex.txt
-		if [[ -s $logs/extraodex.txt ]]; then
-			extraapp=""
-			line=""
-			cat $logs/extraodex.txt | while read line; do
-				if [[ ! $(echo "$line" | rev | cut -d"/" -f1 | rev | grep "^\.") = "" ]]; then
-					newapp=$(ls $line | grep .apk | cut -d"." -f1)
-					newappdir=$(echo "$line" | rev | cut -d"/" -f2- | rev)/$newapp
-					mv $line $newappdir
-					echo "$romdir/$newappdir $romdir/$line" >> $logs/extramv.txt
-					line2=$(echo $line | sed 's:\/:\\/:g')
-					newappdir2=$(echo $newappdir | sed 's:\/:\\/:g')
-					sed -i "s/$line2/$newappdir2/" $logs/extraodex.txt
-					line="$newappdir"
-				fi
-				extraapp=$(basename $line)
-				mv $romdir/$line $sysdir/app/$extraapp
-			done
-		fi
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_deop"
-	echo "----------------------------------------------------"
-	echo ""
-	if [[ ! -d "$framedir/$arch/odex" ]]; then
-		java -Xmx${heapsize}m -jar $oat2dex boot $framedir/$arch/boot.oat >> $logs/deodex.log
-	fi
-	if [[ ! $arch2 = "" ]]; then
-		if [[ ! -d "$framedir/$arch2/odex" ]]; then
-			java -Xmx${heapsize}m -jar $oat2dex boot $framedir/$arch2/boot.oat >> $logs/deodex.log
-		fi
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_app"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $appdir)
-	app=""
-	for app in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $appdir/$app/oat/$arch && -d $appdir/$app/oat/$arch2 ]]; then
-			rm -rf $appdir/$app/oat/$arch2
-		fi
-	done
-	deoappdir="$appdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexm
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexm
-	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		line=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
-		fi
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_priv"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $privdir)
-	privapp=""
-	for privapp in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $privdir/$privapp/oat/$arch && -d $privdir/$privapp/oat/$arch2 ]]; then
-			rm -rf $privdir/$privapp/oat/$arch2
-		fi
-	done
-	deoappdir="$privdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexm
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexm
-		deoarch="oat/$arch"
-		deoarch2="$arch"
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_frame"
-	echo "----------------------------------------------------"
-	echo ""
-	if [[ -d $framedir/$deoarch ]]; then
-		for frame in $(ls $framedir/$deoarch | grep .odex$ | sort); do
-			echo ""
-			echo "$t_deodex_deodexing $frame"
-			echo ""
-			errtest=$(echo "$frame" | rev | cut -d"." -f2- | rev)
-			java -Xmx${heapsize}m -jar $oat2dex $framedir/$deoarch/$frame $framedir/$deoarch2/odex >> $logs/deodex.log
-		done
-	fi
-	mv $framedir/$deoarch2/dex/* $framedir/$deoarch/
-	ls $framedir/$deoarch | grep "\.dex$" | while read line; do
-		if [[ $(echo "$line" | grep classes) = "" ]]; then
-			frame=$(echo "$(echo "$line" | sed 's/\.dex//').jar:classes.dex")
-		else
-			dexclass=$(echo "$line" | rev | cut -d"-" -f1 | rev)
-			frame=$(echo "$(echo "$line" | sed "s/-$dexclass//").jar:$dexclass")
-		fi
-		mv $framedir/$deoarch/$line $framedir/$frame
-	done
-	banner
-	echo "$bluet$t_deodex_pack_jar$normal"
-	ls $framedir | grep "jar:classes.dex" | sort | while read line; do
-		line2=$(echo "$line" | cut -d":" -f1)
-		ls $framedir | grep .dex$ | grep "^$line2" | while read line3; do
-			line4=$(echo "$line3" | cut -d":" -f2)
-			mv $framedir/$line3 $framedir/$line4
-		done
-		$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
-		rm -rf $framedir/classes*.dex
-	done
-	rm -rf $framedir/$arch/odex
-	rm -rf $framedir/$arch/dex
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2/odex
-		rm -rf $framedir/$arch2/dex
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_clean"
-	echo "----------------------------------------------------"
-	echo ""
-	echo ""
-	rm -rf $framedir/oat
-	rm -rf $framedir/$arch
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2
-	fi
-	deodex_fail_list=$(grep "convertToDex: skip" $logs/deodex.log | cut -d"/" -f2- | sort -u)
-	if [[ ! $deodex_fail_list = "" ]]; then
-		banner
-		echo -e "$t_deodex_problems"
-		echo "$yellowt$deodex_fail_list$normal"
-		echo ""
-		echo "$greent$t_deodex_try_smali$normal"
-		echo ""
-		read -p "$t_enter_continue"
-	fi
-	cd $romdir
-	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
-	if [[ "$stillodexed" = "" ]]; then
-		banner
-		echo "$greent$t_deodex_complete$normal"
-		exit_deo
-	else
-		banner
-		echo "$redt$t_deodex_remain"
-		echo ""
-		echo "$yellowt$stillodexed$normal"
-		exit_deo
-	fi
-}
-deodex_m2() {
-	arch=""
-	arch2=""
-	armtest=$(find $framedir -type d | grep -m 1 -o arm$)
-	arm64test=$(find $framedir -type d | grep -m 1 -o arm64$)
-	x86test=$(find $framedir -type d | grep -m 1 -o x86$)
-	x86_64test=$(find $framedir -type d | grep -m 1 -o x86_64$)
-	if [[ $arm64test = "arm64" && -f $framedir/arm64/boot.oat ]]; then
-		arch="arm64"
-		if [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-			arch2="arm"
-		fi
-	elif [[ $x86_64test = "x86_64" && -f $framedir/x86_64/boot.oat ]]; then
-		arch="x86_64"
-		if [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-			arch2="x86"
-		fi
-	elif [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-		arch="arm"
-	elif [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-		arch="x86"
-	else
-		while [[ ! -f $framedir/$arch/boot.oat ]]; do
-			banner
-			echo -e "$t_deodex_config_arch"
-			echo ""
-			read arch
-		done
-	fi
-	if [[ -f $framedir/$arch/boot.oat ]]; then
-		banner
-		echo "${bluet}$t_startup_project $greent$romname"
-		echo "$bluet$t_startup_version $greent$androidversion"
-		echo "$bluet$t_deodex_api$greent$api"
-		echo "$bluet$t_deodex_arch$greent$arch$normal"
-		if [[ ! $arch2 = "" ]]; then
-			echo "$bluet$t_deodex_arch2$greent$arch2$normal"
-		fi
-		echo -e "$bluet$t_deodex_method${greent}\t$(basename $smali)"
-		echo -e "\t$(basename $baksmali)$normal"
-		echo ""
-		read -n 1 -p "$t_deodex_continue_q"
-		if [[ ! $REPLY = "y" ]]; then
-			rom_tools
-			return 1
-		fi
-	else
-		banner
-		echo "$redb$yellowt$bold$t_warning$normal"
-		echo "$redt$t_error_mess$normal"
-		exit_deo
-	fi
-	dodeodexm2() {
-		app=""
-		for app in $(echo "$applist"); do
-			if [[ ! -d $deoappdir/$app/$deoarch ]]; then
-				continue
-			fi
-			if [[ $($p7z l $deoappdir/$app/$app.apk | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$t_deodex_deodexing $app"
-				echo ""
-				classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $deoappdir/$app/$deoarch/$app.odex)
-				echo "$classes" >> $logs/deodex.log
-				echo "$classes" | while read line; do
-					apkdex=$(basename $(echo "$line"))
-					if [[ $(echo "$apkdex" | grep classes) = "" ]]; then
-						dexclass="classes.dex"
-					else
-						dexclass=$(echo "$apkdex" | cut -d":" -f2-)
-					fi
-					java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $deoappdir/$app/$deoarch/$app.odex/$apkdex -o $deoappdir/$app/$deoarch/smali >> $logs/deodex.log
-					java -Xmx${heapsize}m -jar $smali assemble $deoappdir/$app/$deoarch/smali -o $deoappdir/$app/$deoarch/$dexclass >> $logs/deodex.log
-					rm -rf $deoappdir/$app/$deoarch/smali
-				done
-				$aapt add -fk $deoappdir/$app/$app.apk $deoappdir/$app/$deoarch/classes*.dex >> $logs/zip.log
-				rm -rf $deoappdir/$app/oat
-			else
-				echo ""
-				echo "$greent$app $t_deodex_app_already$normal"
-				echo ""
-				rm -rf $deoappdir/$app/oat
-			fi
-		done
-	}
-	rm -rf $prfiles/deodex_*
-	touch $prfiles/deodex_m2
-	rm -rf $logs/*.log
-	if [[ ! $(find $appdir $privdir $framedir -name *odex.* 2>/dev/null | grep ".gz\|.xz") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_extract_txt"
-		echo "----------------------------------------------------"
-		echo ""
-		find $appdir $privdir $framedir -name *odex.gz 2>/dev/null | while read line; do
-			gzdir=$(dirname $line)
-			gzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $gzfile"
-			echo ""
-			$p7z e -o$gzdir $line 2>/dev/null >> $logs/zip.log
-		done
-		find $appdir $privdir $framedir -name *odex.xz 2>/dev/null | while read line; do
-			xzdir=$(dirname $line)
-			xzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $xzfile"
-			echo ""
-			$p7z e -o$xzdir $line 2>/dev/null >> $logs/zip.log
-		done
-	fi
-	if [[ -d $sysdir/app && ! $(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_move"
-		echo "----------------------------------------------------"
-		echo ""
-		find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u > $logs/extraodex.txt
-		if [[ -s $logs/extraodex.txt ]]; then
-			extraapp=""
-			line=""
-			cat $logs/extraodex.txt | while read line; do
-				if [[ ! $(echo "$line" | rev | cut -d"/" -f1 | rev | grep "^\.") = "" ]]; then
-					newapp=$(ls $line | grep .apk | cut -d"." -f1)
-					newappdir=$(echo "$line" | rev | cut -d"/" -f2- | rev)/$newapp
-					mv $line $newappdir
-					echo "$romdir/$newappdir $romdir/$line" >> $logs/extramv.txt
-					line2=$(echo $line | sed 's:\/:\\/:g')
-					newappdir2=$(echo $newappdir | sed 's:\/:\\/:g')
-					sed -i "s/$line2/$newappdir2/" $logs/extraodex.txt
-					line="$newappdir"
-				fi
-				extraapp=$(basename $line)
-				mv $romdir/$line $sysdir/app/$extraapp
-			done
-		fi
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_app"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $appdir)
-	app=""
-	for app in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $appdir/$app/oat/$arch && -d $appdir/$app/oat/$arch2 ]]; then
-			rm -rf $appdir/$app/oat/$arch2
-		fi
-	done
-	deoappdir="$appdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexm2
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexm2
-	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		line=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
-		fi
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_priv"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $privdir)
-	privapp=""
-	for privapp in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $privdir/$privapp/oat/$arch && -d $privdir/$privapp/oat/$arch2 ]]; then
-			rm -rf $privdir/$privapp/oat/$arch2
-		fi
-	done
-	deoappdir="$privdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexm2
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexm2
-		deoarch="oat/$arch"
-		deoarch2="$arch"
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_frame"
-	echo "----------------------------------------------------"
-	echo ""
-	classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch2/boot.oat | rev | cut -d"/" -f1 | rev)
-	line=""
-	for line in $(echo "$classes"); do
-		if [[ $(echo "$line" | grep classes) = "" ]]; then
-			framejar="$line"
-			dexclass=":classes.dex"
-		else
-			framejar=$(echo "$line" | cut -d":" -f1)
-			dexclass=""
-		fi
-		if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-			echo ""
-			echo "$greent$frame $t_deodex_app_already$normal"
-			echo ""
-			continue
-		fi
-		line2=$(echo "$line" | rev | cut -d"." -f2- | rev)
-		echo ""
-		echo "$t_deodex_deodexing $line2"
-		echo ""
-		java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch2/boot.oat/$line -o $framedir/smali >> $logs/deodex.log
-		java -Xmx${heapsize}m -jar $smali assemble $framedir/smali -o $framedir/$line$dexclass >> $logs/deodex.log
-		rm -rf $framedir/smali
-	done
-	if [[ -d $framedir/$deoarch ]]; then
-		frame=""
-		for frame in $(ls $framedir/$deoarch | grep .odex$ | sort); do
-			framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
-			if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$greent$frame $t_deodex_app_already$normal"
-				echo ""
-				continue
-			fi
-			echo ""
-			echo "$t_deodex_deodexing $frame"
-			echo ""
-			classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch/$frame)
-			echo "$classes" >> $logs/deodex.log
-			echo "$classes" | while read line; do
-				apkdex=$(basename $(echo "$line"))
-				if [[ $(echo "$apkdex" | grep classes) = "" ]]; then
-					dexclass="$apkdex:classes.dex"
-				else
-					dexclass="$apkdex"
-				fi
-				java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch/$frame/$apkdex -o $framedir/$deoarch/smali >> $logs/deodex.log
-				java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch/smali -o $framedir/$dexclass >> $logs/deodex.log
-				rm -rf $framedir/$deoarch/smali
-			done
-		done
-	fi
-	banner
-	echo "$bluet$t_deodex_pack_jar$normal"
-	ls $framedir | grep "jar:classes.dex" | sort | while read line; do
-		line2=$(echo "$line" | cut -d":" -f1)
-		ls $framedir | grep .dex$ | grep "^$line2" | while read line3; do
-			line4=$(echo "$line3" | cut -d":" -f2)
-			mv $framedir/$line3 $framedir/$line4
-		done
-		if [[ -f $framedir/classes.dex ]]; then
-			$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
-		else
-			echo "ERROR: $line2 has no classes.dex" >> $logs/deodex.log
-		fi
-		rm -rf $framedir/classes*.dex
-	done
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_clean"
-	echo "----------------------------------------------------"
-	echo ""
-	echo ""
-	rm -rf $framedir/oat
-	rm -rf $framedir/$arch
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2
-	fi
-	cd $romdir
-	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
-	if [[ "$stillodexed" = "" ]]; then
-		banner
-		echo "$greent$t_deodex_complete$normal"
-		exit_deo
-	else
-		banner
-		echo "$redt$t_deodex_remain"
-		echo ""
-		echo "$yellowt$stillodexed$normal"
-		exit_deo
-	fi
-}
-deodex_m3() {
-	arch=""
-	arch2=""
-	armtest=$(find $framedir -type d | grep -m 1 -o arm$)
-	arm64test=$(find $framedir -type d | grep -m 1 -o arm64$)
-	x86test=$(find $framedir -type d | grep -m 1 -o x86$)
-	x86_64test=$(find $framedir -type d | grep -m 1 -o x86_64$)
-	if [[ $arm64test = "arm64" && -f $framedir/arm64/boot.oat ]]; then
-		arch="arm64"
-		if [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-			arch2="arm"
-		fi
-	elif [[ $x86_64test = "x86_64" && -f $framedir/x86_64/boot.oat ]]; then
-		arch="x86_64"
-		if [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-			arch2="x86"
-		fi
-	elif [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-		arch="arm"
-	elif [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-		arch="x86"
-	else
-		while [[ ! -f $framedir/$arch/boot.oat ]]; do
-			banner
-			echo -e "$t_deodex_config_arch"
-			echo ""
-			read arch
-		done
-	fi
-	if [[ -f $framedir/$arch/boot.oat ]]; then
-		banner
-		echo "${bluet}$t_startup_project $greent$romname"
-		echo "$bluet$t_startup_version $greent$androidversion"
-		echo "$bluet$t_deodex_api$greent$api"
-		echo "$bluet$t_deodex_arch$greent$arch$normal"
-		if [[ ! $arch2 = "" ]]; then
-			echo "$bluet$t_deodex_arch2$greent$arch2$normal"
-		fi
-		echo "$bluet$t_deodex_method${greent}oatdump$normal"
-		echo ""
-		read -n 1 -p "$t_deodex_continue_q"
-		if [[ ! $REPLY = "y" ]]; then
-			rom_tools
-			return 1
-		fi
-	else
-		banner
-		echo "$redb$yellowt$bold$t_warning$normal"
-		echo "$redt$t_error_mess$normal"
-		exit_deo
-	fi
-	dodeodexm3() {
-		app=""
-		for app in $(echo "$applist"); do
-			if [[ ! -d $deoappdir/$app/$deoarch ]]; then
-				continue
-			fi
-			if [[ $($p7z l $deoappdir/$app/$app.apk | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$t_deodex_deodexing $app"
-				echo ""
-				$oattools/oatdump --oat-file="$deoappdir/$app/$deoarch/$app.odex" --export-dex-to="$deoappdir/$app/$deoarch" >> $logs/deodex.log
-				$oattools/dexrepair -I $deoappdir/$app/$deoarch >> $logs/deodex.log
-				if [[ ! -f $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex ]]; then
-					echo "${redt}${app} $t_deodex_fail$normal"
-					echo "$deoappdir/$app/$deoarch/$app.odex" >> $logs/deodex_fail_list
-					rm -rf $deoappdir/$app/$deoarch/$app.apk:classes*.dex_export.dex_repaired.dex
-					continue
-				fi
-				mv $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex $deoappdir/$app/$deoarch/classes.dex
-				find $deoappdir/$app/$deoarch -name $app.apk:classes*.dex_export.dex_repaired.dex | while read line; do
-					appclassdex=$(basename $line)
-					appclassdir=$(dirname $line)
-					classname=$(echo "$appclassdex" | cut -d":" -f2 | cut -d"_" -f1)
-					mv $line $appclassdir/$classname
-				done
-				if [[ -f $deoappdir/$app/$deoarch/classes.dex ]]; then
-					$aapt add -fk $deoappdir/$app/$app.apk $deoappdir/$app/$deoarch/classes*.dex >> $logs/zip.log
-				else
-					echo ""
-					echo "$redt$app $t_deodex_fail$normal"
-					echo ""
-					continue
-				fi
-				rm -rf $deoappdir/$app/oat
-			else
-				echo ""
-				echo "$greent$app $t_deodex_app_already$normal"
-				echo ""
-				rm -rf $deoappdir/$app/oat
-			fi
-		done
-	}
-	rm -rf $prfiles/deodex_* $logs/deodex_fail_list
-	touch $prfiles/deodex_m3
-	rm -rf $logs/*.log
-	if [[ ! $(find $appdir $privdir $framedir -name *odex.* 2>/dev/null | grep ".gz\|.xz") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_extract_txt"
-		echo "----------------------------------------------------"
-		echo ""
-		find $appdir $privdir $framedir -name *odex.gz 2>/dev/null | while read line; do
-			gzdir=$(dirname $line)
-			gzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $gzfile"
-			echo ""
-			$p7z e -o$gzdir $line 2>/dev/null >> $logs/zip.log
-		done
-		find $appdir $privdir $framedir -name *odex.xz 2>/dev/null | while read line; do
-			xzdir=$(dirname $line)
-			xzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $xzfile"
-			echo ""
-			$p7z e -o$xzdir $line 2>/dev/null >> $logs/zip.log
-		done
-	fi
-	if [[ -d $sysdir/app && ! $(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_move"
-		echo "----------------------------------------------------"
-		echo ""
-		find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u > $logs/extraodex.txt
-		if [[ -s $logs/extraodex.txt ]]; then
-			extraapp=""
-			line=""
-			cat $logs/extraodex.txt | while read line; do
-				if [[ ! $(echo "$line" | rev | cut -d"/" -f1 | rev | grep "^\.") = "" ]]; then
-					newapp=$(ls $line | grep .apk | cut -d"." -f1)
-					newappdir=$(echo "$line" | rev | cut -d"/" -f2- | rev)/$newapp
-					mv $line $newappdir
-					echo "$romdir/$newappdir $romdir/$line" >> $logs/extramv.txt
-					line2=$(echo $line | sed 's:\/:\\/:g')
-					newappdir2=$(echo $newappdir | sed 's:\/:\\/:g')
-					sed -i "s/$line2/$newappdir2/" $logs/extraodex.txt
-					line="$newappdir"
-				fi
-				extraapp=$(basename $line)
-				mv $romdir/$line $sysdir/app/$extraapp
-			done
-		fi
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_app"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $appdir)
-	app=""
-	for app in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $appdir/$app/oat/$arch && -d $appdir/$app/oat/$arch2 ]]; then
-			rm -rf $appdir/$app/oat/$arch2
-		fi
-	done
-	deoappdir="$appdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexm3
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexm3
-	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		line=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
-		fi
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_priv"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $privdir)
-	privapp=""
-	for privapp in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $privdir/$privapp/oat/$arch && -d $privdir/$privapp/oat/$arch2 ]]; then
-			rm -rf $privdir/$privapp/oat/$arch2
-		fi
-	done
-	deoappdir="$privdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexm3
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexm3
-		deoarch="oat/$arch"
-		deoarch2="$arch"
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_frame"
-	echo "----------------------------------------------------"
-	echo ""
-	mkdir -p $framedir/temp
-	for frame in $(ls $framedir/$deoarch2 | grep .oat$); do
-		echo ""
-		echo "$t_deodex_deodexing $frame"
-		echo ""
-		$oattools/oatdump --oat-file="$framedir/$deoarch2/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
-	done
-	if [[ -d $framedir/$deoarch ]]; then
-		for frame in $(ls $framedir/$deoarch | grep .odex$); do
-			framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
-			if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$greent$frame $t_deodex_app_already$normal"
-				echo ""
-				continue
-			fi
-			echo ""
-			echo "$t_deodex_deodexing $frame"
-			echo ""
-			$oattools/oatdump --oat-file="$framedir/$deoarch/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
-		done
-	fi
-	ls $framedir/temp | grep "export\.dex" | while read line; do
-		if [[ $(echo "$line" | grep classes) = "" ]]; then
-			framejar=$(echo "$line" | sed 's/_export\.dex//')
-		else
-			framejar=$(echo "$line" | cut -d":" -f1)
-		fi
-		if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-			rm -rf $framedir/temp/$line
-		fi
-	done
-	$oattools/dexrepair -I $framedir/temp >> $logs/deodex.log
-	ls $framedir/temp | grep "export.dex_repaired.dex" | while read line; do
-		if [[ $(echo "$line" | grep classes) = "" ]]; then
-			frame=$(echo "$(echo "$line" | sed 's/_export\.dex_repaired\.dex//'):classes.dex")
-		else
-			frame=$(echo "$line" | sed 's/_export\.dex_repaired\.dex//')
-		fi
-		mv $framedir/temp/$line $framedir/$frame
-	done
-	banner
-	echo "$bluet$t_deodex_pack_jar$normal"
-	ls $framedir | grep "jar:classes.dex" | sort | while read line; do
-		line2=$(echo "$line" | cut -d":" -f1)
-		ls $framedir | grep .dex$ | grep "^$line2" | while read line3; do
-			line4=$(echo "$line3" | cut -d":" -f2)
-			mv $framedir/$line3 $framedir/$line4
-		done
-		if [[ -f $framedir/classes.dex ]]; then
-			$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
-		else
-			echo "ERROR: $line2 has no classes.dex" >> $logs/deodex.log
-		fi
-		rm -rf $framedir/classes*.dex
-	done
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_clean"
-	echo "----------------------------------------------------"
-	echo ""
-	echo ""
-	rm -rf $framedir/temp
-	rm -rf $framedir/oat
-	rm -rf $framedir/$arch
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2
-	fi
-	cd $romdir
-	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
-	if [[ "$stillodexed" = "" ]]; then
-		banner
-		echo "$greent$t_deodex_complete$normal"
-		exit_deo
-	else
-		banner
-		echo "$redt$t_deodex_remain"
-		echo ""
-		echo "$yellowt$stillodexed$normal"
-		exit_deo
-	fi
-}
-deodex_n() {
-	arch=""
-	arch2=""
-	armtest=$(find $framedir -type d | grep -m 1 -o arm$)
-	arm64test=$(find $framedir -type d | grep -m 1 -o arm64$)
-	x86test=$(find $framedir -type d | grep -m 1 -o x86$)
-	x86_64test=$(find $framedir -type d | grep -m 1 -o x86_64$)
-	if [[ $arm64test = "arm64" && -f $framedir/arm64/boot.oat ]]; then
-		arch="arm64"
-		if [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-			arch2="arm"
-		fi
-	elif [[ $x86_64test = "x86_64" && -f $framedir/x86_64/boot.oat ]]; then
-		arch="x86_64"
-		if [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-			arch2="x86"
-		fi
-	elif [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-		arch="arm"
-	elif [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-		arch="x86"
-	else
-		while [[ ! -f $framedir/$arch/boot.oat ]]; do
-			banner
-			echo -e "$t_deodex_config_arch"
-			echo ""
-			read arch
-		done
-	fi
-	if [[ -f $framedir/$arch/boot.oat ]]; then
-		banner
-		echo "${bluet}$t_startup_project $greent$romname"
-		echo "$bluet$t_startup_version $greent$androidversion"
-		echo "$bluet$t_deodex_api$greent$api"
-		echo "$bluet$t_deodex_arch$greent$arch$normal"
-		if [[ ! $arch2 = "" ]]; then
-			echo "$bluet$t_deodex_arch2$greent$arch2$normal"
-		fi
-		echo "$bluet$t_deodex_method ${greent}oatdump$normal"
-		echo ""
-		read -n 1 -p "$t_deodex_continue_q"
-		if [[ ! $REPLY = "y" ]]; then
-			rom_tools
-			return 1
-		fi
-	else
-		banner
-		echo "$redb$yellowt$bold$t_warning$normal"
-		echo "$redt$t_error_mess$normal"
-		exit_deo
-	fi
-	dodeodexn() {
-		app=""
-		for app in $(echo "$applist"); do
-			if [[ ! -d $deoappdir/$app/$deoarch ]]; then
-				continue
-			fi
-			if [[ $($p7z l $deoappdir/$app/$app.apk | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$t_deodex_deodexing $app"
-				echo ""
-				$oattools/oatdump --oat-file="$deoappdir/$app/$deoarch/$app.odex" --export-dex-to="$deoappdir/$app/$deoarch" >> $logs/deodex.log
-				$oattools/dexrepair -I $deoappdir/$app/$deoarch >> $logs/deodex.log
-				if [[ ! -f $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex ]]; then
-					echo "${redt}${app} $t_deodex_fail$normal"
-					echo "$deoappdir/$app/$deoarch/$app.odex" >> $logs/deodex_fail_list
-					rm -rf $deoappdir/$app/$deoarch/$app.apk:classes*.dex_export.dex_repaired.dex
-					continue
-				fi
-				mv $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex $deoappdir/$app/$deoarch/classes.dex
-				find $deoappdir/$app/$deoarch -name $app.apk:classes*.dex_export.dex_repaired.dex | while read line; do
-					appclassdex=$(basename $line)
-					appclassdir=$(dirname $line)
-					classname=$(echo "$appclassdex" | cut -d":" -f2 | cut -d"_" -f1)
-					mv $line $appclassdir/$classname
-				done
-				$aapt add -fk $deoappdir/$app/$app.apk $deoappdir/$app/$deoarch/classes*.dex >> $logs/zip.log
-				rm -rf $deoappdir/$app/oat
-			else
-				echo ""
-				echo "$greent$app $t_deodex_app_already$normal"
-				echo ""
-				rm -rf $deoappdir/$app/oat
-			fi
-		done
-	}
-	rm -rf $prfiles/deodex_* $logs/deodex_fail_list
-	touch $prfiles/deodex_n
-	rm -rf $logs/*.log
-	if [[ ! $(find $appdir $privdir $framedir -name *odex.* 2>/dev/null | grep ".gz\|.xz") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_extract_txt"
-		echo "----------------------------------------------------"
-		echo ""
-		find $appdir $privdir $framedir -name *odex.gz 2>/dev/null | while read line; do
-			gzdir=$(dirname $line)
-			gzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $gzfile"
-			echo ""
-			$p7z e -o$gzdir $line 2>/dev/null >> $logs/zip.log
-		done
-		find $appdir $privdir $framedir -name *odex.xz 2>/dev/null | while read line; do
-			xzdir=$(dirname $line)
-			xzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $xzfile"
-			echo ""
-			$p7z e -o$xzdir $line 2>/dev/null >> $logs/zip.log
-		done
-	fi
-	if [[ -d $sysdir/app && ! $(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_move"
-		echo "----------------------------------------------------"
-		echo ""
-		find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u > $logs/extraodex.txt
-		if [[ -s $logs/extraodex.txt ]]; then
-			extraapp=""
-			line=""
-			cat $logs/extraodex.txt | while read line; do
-				if [[ ! $(echo "$line" | rev | cut -d"/" -f1 | rev | grep "^\.") = "" ]]; then
-					newapp=$(ls $line | grep .apk | cut -d"." -f1)
-					newappdir=$(echo "$line" | rev | cut -d"/" -f2- | rev)/$newapp
-					mv $line $newappdir
-					echo "$romdir/$newappdir $romdir/$line" >> $logs/extramv.txt
-					line2=$(echo $line | sed 's:\/:\\/:g')
-					newappdir2=$(echo $newappdir | sed 's:\/:\\/:g')
-					sed -i "s/$line2/$newappdir2/" $logs/extraodex.txt
-					line="$newappdir"
-				fi
-				extraapp=$(basename $line)
-				mv $romdir/$line $sysdir/app/$extraapp
-			done
-		fi
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_app"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $appdir)
-	app=""
-	for app in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $appdir/$app/oat/$arch && -d $appdir/$app/oat/$arch2 ]]; then
-			rm -rf $appdir/$app/oat/$arch2
-		fi
-	done
-	deoappdir="$appdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexn
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexn
-	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		line=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
-		fi
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_priv"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $privdir)
-	privapp=""
-	for privapp in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $privdir/$privapp/oat/$arch && -d $privdir/$privapp/oat/$arch2 ]]; then
-			rm -rf $privdir/$privapp/oat/$arch2
-		fi
-	done
-	deoappdir="$privdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexn
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexn
-		deoarch="oat/$arch"
-		deoarch2="$arch"
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_frame"
-	echo "----------------------------------------------------"
-	echo ""
-	mkdir -p $framedir/temp
-	for frame in $(ls $framedir/$deoarch2 | grep .oat$); do
-		if [[ ! $frame = "boot.oat" ]]; then
-			framejar=$(echo "$(echo "$frame" | sed 's/^boot-//; s/\.oat$//').jar")
-			if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$greent$frame $t_deodex_app_already$normal"
-				echo ""
-				continue
-			fi
-		fi
-		echo ""
-		echo "$t_deodex_deodexing $frame"
-		echo ""
-		$oattools/oatdump --oat-file="$framedir/$deoarch2/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
-	done
-	if [[ -d $framedir/$deoarch ]]; then
-		for frame in $(ls $framedir/$deoarch | grep .odex$); do
-			framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
-			if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$greent$frame $t_deodex_app_already$normal"
-				echo ""
-				continue
-			fi
-			echo ""
-			echo "$t_deodex_deodexing $frame"
-			echo ""
-			$oattools/oatdump --oat-file="$framedir/$deoarch/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
-		done
-	fi
-	$oattools/dexrepair -I $framedir/temp >> $logs/deodex.log
-	ls $framedir/temp | grep "export.dex_repaired.dex" | while read line; do
-		if [[ $(echo "$line" | grep classes) = "" ]]; then
-			frame=$(echo "$(echo "$line" | sed 's/_export\.dex_repaired\.dex//'):classes.dex")
-		else
-			frame=$(echo "$line" | sed 's/_export\.dex_repaired\.dex//')
-		fi
-		mv $framedir/temp/$line $framedir/$frame
-	done
-	banner
-	echo "$bluet$t_deodex_pack_jar$normal"
-	ls $framedir | grep "jar:classes.dex" | sort | while read line; do
-		line2=$(echo "$line" | cut -d":" -f1)
-		ls $framedir | grep .dex$ | grep "^$line2" | while read line3; do
-			line4=$(echo "$line3" | cut -d":" -f2)
-			mv $framedir/$line3 $framedir/$line4
-		done
-		if [[ -f $framedir/classes.dex ]]; then
-			$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
-		else
-			echo "ERROR: $line2 has no classes.dex" >> $logs/deodex.log
-		fi
-		rm -rf $framedir/classes*.dex
-	done
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_clean"
-	echo "----------------------------------------------------"
-	echo ""
-	echo ""
-	rm -rf $framedir/temp
-	rm -rf $framedir/oat
-	rm -rf $framedir/$arch
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2
-	fi
-	cd $romdir
-	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
-	if [[ "$stillodexed" = "" ]]; then
-		delete_meta_inf
-		banner
-		echo "$greent$t_deodex_complete$normal"
-		exit_deo
-	else
-		banner
-		echo "$redt$t_deodex_remain"
-		echo ""
-		echo "$yellowt$stillodexed$normal"
-		exit_deo
-	fi
-}
-deodex_n2() {
-	arch=""
-	arch2=""
-	armtest=$(find $framedir -type d | grep -m 1 -o arm$)
-	arm64test=$(find $framedir -type d | grep -m 1 -o arm64$)
-	x86test=$(find $framedir -type d | grep -m 1 -o x86$)
-	x86_64test=$(find $framedir -type d | grep -m 1 -o x86_64$)
-	if [[ $arm64test = "arm64" && -f $framedir/arm64/boot.oat ]]; then
-		arch="arm64"
-		if [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-			arch2="arm"
-		fi
-	elif [[ $x86_64test = "x86_64" && -f $framedir/x86_64/boot.oat ]]; then
-		arch="x86_64"
-		if [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-			arch2="x86"
-		fi
-	elif [[ $armtest = "arm" && -f $framedir/arm/boot.oat ]]; then
-		arch="arm"
-	elif [[ $x86test = "x86" && -f $framedir/x86/boot.oat ]]; then
-		arch="x86"
-	else
-		while [[ ! -f $framedir/$arch/boot.oat ]]; do
-			banner
-			echo -e "$t_deodex_config_arch"
-			echo ""
-			read arch
-		done
-	fi
-	if [[ -f $framedir/$arch/boot.oat ]]; then
-		banner
-		echo "${bluet}$t_startup_project $greent$romname"
-		echo "$bluet$t_startup_version $greent$androidversion"
-		echo "$bluet$t_deodex_api$greent$api"
-		echo "$bluet$t_deodex_arch$greent$arch$normal"
-		if [[ ! $arch2 = "" ]]; then
-			echo "$bluet$t_deodex_arch2$greent$arch2$normal"
-		fi
-		echo -e "$bluet$t_deodex_method${greent}\t$(basename $smali)"
-		echo -e "\t$(basename $baksmali)$normal"
-		echo ""
-		echo ""
-		read -n 1 -p "$t_deodex_continue_q"
-		if [[ ! $REPLY = "y" ]]; then
-			rom_tools
-			return 1
-		fi
-	else
-		banner
-		echo "$redb$yellowt$bold$t_warning$normal"
-		echo "$redt$t_error_mess$normal"
-		exit_deo
-	fi
-	dodeodexn2() {
-		app=""
-		for app in $(echo "$applist"); do
-			if [[ ! -d $deoappdir/$app/$deoarch ]]; then
-				continue
-			fi
-			if [[ $($p7z l $deoappdir/$app/$app.apk | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$t_deodex_deodexing $app"
-				echo ""
-				classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $deoappdir/$app/$deoarch/$app.odex 2>&1)
-				echo "$classes" >> $logs/deodex.log
-				echo "$classes" | while read line; do
-					apkdex=$(basename $(echo "$line"))
-					if [[ $(echo "$apkdex" | grep classes) = "" ]]; then
-						dexclass="classes.dex"
-					else
-						dexclass=$(echo "$apkdex" | cut -d":" -f2-)
-					fi
-					java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $deoappdir/$app/$deoarch/$app.odex/$apkdex -o $deoappdir/$app/$deoarch/smali >> $logs/deodex.log
-					java -Xmx${heapsize}m -jar $smali assemble $deoappdir/$app/$deoarch/smali -o $deoappdir/$app/$deoarch/$dexclass >> $logs/deodex.log
-					rm -rf $deoappdir/$app/$deoarch/smali
-				done
-				$aapt add -fk $deoappdir/$app/$app.apk $deoappdir/$app/$deoarch/classes*.dex >> $logs/zip.log
-				rm -rf $deoappdir/$app/oat
-			else
-				echo ""
-				echo "$greent$app $t_deodex_app_already$normal"
-				echo ""
-				rm -rf $deoappdir/$app/oat
-			fi
-		done
-	}
-	rm -rf $prfiles/deodex_*
-	touch $prfiles/deodex_n2
-	rm -rf $logs/*.log
-	if [[ ! $(find $appdir $privdir $framedir -name *odex.* 2>/dev/null | grep ".gz\|.xz") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_extract_txt"
-		echo "----------------------------------------------------"
-		echo ""
-		find $appdir $privdir $framedir -name *odex.gz 2>/dev/null | while read line; do
-			gzdir=$(dirname $line)
-			gzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $gzfile"
-			echo ""
-			$p7z e -o$gzdir $line 2>/dev/null >> $logs/zip.log
-		done
-		find $appdir $privdir $framedir -name *odex.xz 2>/dev/null | while read line; do
-			xzdir=$(dirname $line)
-			xzfile=$(basename $line)
-			echo ""
-			echo "$t_deodex_extract $xzfile"
-			echo ""
-			$p7z e -o$xzdir $line 2>/dev/null >> $logs/zip.log
-		done
-	fi
-	if [[ -d $sysdir/app && ! $(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/") = "" ]]; then
-		echo "$clears"
-		echo ""
-		echo "----------------------------------------------------"
-		echo "$t_deodex_move"
-		echo "----------------------------------------------------"
-		echo ""
-		find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u > $logs/extraodex.txt
-		if [[ -s $logs/extraodex.txt ]]; then
-			extraapp=""
-			line=""
-			cat $logs/extraodex.txt | while read line; do
-				if [[ ! $(echo "$line" | rev | cut -d"/" -f1 | rev | grep "^\.") = "" ]]; then
-					newapp=$(ls $line | grep .apk | cut -d"." -f1)
-					newappdir=$(echo "$line" | rev | cut -d"/" -f2- | rev)/$newapp
-					mv $line $newappdir
-					echo "$romdir/$newappdir $romdir/$line" >> $logs/extramv.txt
-					line2=$(echo $line | sed 's:\/:\\/:g')
-					newappdir2=$(echo $newappdir | sed 's:\/:\\/:g')
-					sed -i "s/$line2/$newappdir2/" $logs/extraodex.txt
-					line="$newappdir"
-				fi
-				extraapp=$(basename $line)
-				mv $romdir/$line $sysdir/app/$extraapp
-			done
-		fi
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_app"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $appdir)
-	app=""
-	for app in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $appdir/$app/oat/$arch && -d $appdir/$app/oat/$arch2 ]]; then
-			rm -rf $appdir/$app/oat/$arch2
-		fi
-	done
-	deoappdir="$appdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexn2
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexn2
-	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		line=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
-		fi
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_priv"
-	echo "----------------------------------------------------"
-	echo ""
-	applist=$(ls $privdir)
-	privapp=""
-	for privapp in $(echo "$applist"); do
-		if [[ ! $arch2 = "" && -d $privdir/$privapp/oat/$arch && -d $privdir/$privapp/oat/$arch2 ]]; then
-			rm -rf $privdir/$privapp/oat/$arch2
-		fi
-	done
-	deoappdir="$privdir"
-	deoarch="oat/$arch"
-	deoarch2="$arch"
-	dodeodexn2
-	if [[ ! $arch2 = "" ]]; then
-		deoarch="oat/$arch2"
-		deoarch2="$arch2"
-		dodeodexn2
-		deoarch="oat/$arch"
-		deoarch2="$arch"
-	fi
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_start_frame"
-	echo "----------------------------------------------------"
-	echo ""
-	ls $framedir/$deoarch2 | grep .oat$ | sort | while read line; do
-		if [[ ! $line = "boot.oat" ]]; then
-			framejar=$(echo "$(echo "$line" | sed 's/^boot-//; s/\.oat$//').jar")
-			if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$greent$frame $t_deodex_app_already$normal"
-				echo ""
-				continue
-			fi
-		fi
-		echo ""
-		echo "$t_deodex_deodexing $line"
-		echo ""
-		classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch2/$line | rev | cut -d"/" -f1 | rev)
-		echo "$classes" >> $logs/deodex.log
-		echo "$classes" | while read line2; do
-			if [[ $(echo "$line2" | grep classes) = "" ]]; then
-				line3=$(echo "$line2" | rev | cut -d"." -f2- | rev)
-				dexclass="classes.dex"
-			else
-				line3=$(echo "$line2" | rev | cut -d"." -f3- | rev)
-				dexclass=$(echo "$line2" | cut -d":" -f2-)
-			fi
-			java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch2/$line/$line2 -o $framedir/$deoarch2/smali >> $logs/deodex.log
-			java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch2/smali -o $framedir/$line3.jar:$dexclass >> $logs/deodex.log
-			rm -rf $framedir/$deoarch2/smali
-		done
-	done
-	if [[ -d $framedir/$deoarch ]]; then
-		frame=""
-		for frame in $(ls $framedir/$deoarch | grep .odex$ | sort); do
-			framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
-			if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-				echo ""
-				echo "$greent$frame $t_deodex_app_already$normal"
-				echo ""
-				continue
-			fi
-			echo ""
-			echo "$t_deodex_deodexing $frame"
-			echo ""
-			classes=$(java -Xmx${heapsize}m -jar $baksmali list dex $framedir/$deoarch/$frame)
-			echo "$classes" >> $logs/deodex.log
-			echo "$classes" | while read line; do
-				apkdex=$(basename $(echo "$line"))
-				if [[ $(echo "$apkdex" | grep classes) = "" ]]; then
-					dexclass="$apkdex:classes.dex"
-				else
-					dexclass="$apkdex"
-				fi
-				java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch/$frame/$apkdex -o $framedir/$deoarch/smali >> $logs/deodex.log
-				java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch/smali -o $framedir/$dexclass >> $logs/deodex.log
-				rm -rf $framedir/$deoarch/smali
-			done
-		done
-	fi
-	banner
-	echo "$bluet$t_deodex_pack_jar$normal"
-	ls $framedir | grep "jar:classes.dex" | sort | while read line; do
-		line2=$(echo "$line" | cut -d":" -f1)
-		ls $framedir | grep .dex$ | grep "^$line2" | while read line3; do
-			line4=$(echo "$line3" | cut -d":" -f2)
-			mv $framedir/$line3 $framedir/$line4
-		done
-		if [[ -f $framedir/classes.dex ]]; then
-			$aapt add -fk $framedir/$line2 $framedir/classes*.dex >> $logs/zip.log
-		else
-			echo "ERROR: $line2 has no classes.dex" >> $logs/deodex.log
-		fi
-		rm -rf $framedir/classes*.dex
-	done
-	echo "$clears"
-	echo ""
-	echo "----------------------------------------------------"
-	echo "$t_deodex_clean"
-	echo "----------------------------------------------------"
-	echo ""
-	echo ""
-	rm -rf $framedir/oat
-	rm -rf $framedir/$arch
-	if [[ ! $arch2 = "" ]]; then
-		rm -rf $framedir/$arch2
-	fi
-	cd $romdir
-	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
-	if [[ "$stillodexed" = "" ]]; then
-		delete_meta_inf
 		banner
 		echo "$greent$t_deodex_complete$normal"
 		exit_deo
@@ -4196,8 +2965,8 @@ deodex_old() {
 	echo "${bluet}$t_startup_project $greent$romname"
 	echo "$bluet$t_startup_version $greent$androidversion"
 	echo "$bluet$t_deodex_api$greent$api$normal"
-	echo -e "$bluet$t_deodex_method${greent}\t$(basename $smalio)"
-	echo -e "\t$(basename $baksmalio)$normal"
+	echo -e "$bluet$t_deodex_method${greent}\t$(basename $smali)"
+	echo -e "\t$(basename $baksmali)$normal"
 	echo ""
 	read -n 1 -p "$t_deodex_continue_q"
 	if [[ ! $REPLY = "y" ]]; then
@@ -4214,8 +2983,8 @@ deodex_old() {
 				echo ""
 				echo "$t_deodex_deodexing $app"
 				echo ""
-				java -Xmx${heapsize}m -jar $baksmalio -a $api -d $framedir -x $deoappdir/$app.odex -o $deoappdir/smali >> $logs/deodex.log
-				java -Xmx${heapsize}m -jar $smalio -a $api $deoappdir/smali -o $deoappdir/classes.dex >> $logs/deodex.log
+				java -Xmx${heapsize}m -jar $baksmali -a $api -d $framedir -x $deoappdir/$app.odex -o $deoappdir/smali >> $logs/deodex.log
+				java -Xmx${heapsize}m -jar $smali -a $api $deoappdir/smali -o $deoappdir/classes.dex >> $logs/deodex.log
 				$aapt add -fk $deoappdir/$app.$deoext $deoappdir/classes.dex 2>/dev/null >> $logs/zip.log
 				rm -rf $deoappdir/$app.odex
 				rm -rf $deoappdir/smali
@@ -5798,19 +4567,28 @@ imgextract() {
 				if [[ ! -f $prfiles/cap_temp ]]; then
 					touch $prfiles/cap_temp
 				fi
-				if [[ $extractimg = "system" && -f output/default.prop ]]; then
-					metalist="$tools/updater/set_meta_list2"
-				elif [[ $extractimg = "system" ]]; then
-					metalist="$tools/updater/set_meta_list"
+				if [[ $extractimg = "system" ]]; then
+					if [[ -f output/default.prop ]]; then
+						find output/system/bin -type f 2>/dev/null | sed 's/^output/system/' > $prfiles/binblk
+						find output/system/vendor/bin -type f 2>/dev/null | sed 's/^output/system/' > $prfiles/vinblk
+						cp $tools/updater/set_meta_list2 $prfiles/set_meta_list
+					else
+						find output/bin -type f 2>/dev/null | sed 's/^output/system/' > $prfiles/binblk
+						find output/vendor/bin -type f 2>/dev/null | sed 's/^output/system/' > $prfiles/vinblk
+						cp $tools/updater/set_meta_list $prfiles/set_meta_list
+					fi
+					sed -i "/#BIN/ r $prfiles/binblk" $prfiles/set_meta_list
+					sed -i "/#VBIN/ r $prfiles/vinblk" $prfiles/set_meta_list
+					rm -rf $prfiles/binblk $prfiles/vinblk
+					metalist=$(cat $prfiles/set_meta_list)
 				elif [[ $extractimg = "vendor" ]]; then
 					if [[ -f $prfiles/file_contexts ]]; then
-						grep "^/vendor" $prfiles/file_contexts | gawk '{print $1}' | sed 's/^\///g' > $prfiles/vcontexts
-						metalist="$prfiles/vcontexts"
+						metalist=$(grep "^/vendor" $prfiles/file_contexts | gawk '{print $1}' | sed 's/^\///g')
 					else
-						metalist="$tools/updater/set_meta_listV"
+						metalist=$(cat $tools/updater/set_meta_listV)
 					fi
 				fi
-				cat $metalist | while read line; do
+				echo "$metalist" | while read line; do
 					if [[ $extractimg = "system" ]]; then
 						line2=$(echo "$line" | sed 's/^system/output/')
 						set_metadata1="set_metadata1"
@@ -5824,7 +4602,6 @@ imgextract() {
 						if [[ $(grep "$line2" $prfiles/cap_temp) != "" ]]; then
 							caps=$(grep "$line2 =" $prfiles/cap_temp | cut -d' ' -f3)
 							captest=$(echo "$caps" | cut -d'+' -f1 | tr ',' ' ')
-							# sudo setcap $caps $line
 							for a in $(echo "$captest"); do
 								capint=$(grep "$a" $tools/updater/cap_def | gawk '{print $2}')
 								cappower1=$(echo "2^$capint" | bc)
@@ -6056,7 +4833,13 @@ isinitd() {
 		inittest=$(${usesudo}grep -r "init\.d" . | grep -v "lge_fota\|chargerlogo")
 	elif [[ -f $romdir/system/default.prop ]]; then
 		cd $romdir/system
-		inittest=$(find . -not -path "*system*" 2>/dev/null | while read line; do grep "init\.d" $line 2>/dev/null; done)
+		inittest=''
+		find . -not -path "*system*" 2>/dev/null | while read line; do
+			inittest=$(grep "init\.d" $line 2>/dev/null)
+			if [[ $inittest != '' ]]; then
+				break
+			fi
+		done
 	else
 		return 1
 	fi

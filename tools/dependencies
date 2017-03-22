@@ -22,7 +22,6 @@ head
 ldd
 ln
 ls
-lz4
 lzma
 lzop
 mkdir
