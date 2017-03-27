@@ -1756,7 +1756,11 @@ choosepr() {
 	fi
 	echo "${magentat}q = $t_menu_quit$normal"
 	echo ""
-	read -p "$t_select_enter" REPLY
+	if [[ "$#" -gt "9" ]]; then
+		read -p "$t_select_enter" REPLY
+	else
+		read -n 1 -p "$t_select" REPLY
+	fi
 	i="$REPLY"
 	if [[ $i -gt 0 && $i -le $# ]]; then
 		export $v="${!i}"
@@ -2181,6 +2185,11 @@ deodex_start() {
 			oat2dex="$thecho"
 		fi
 	}
+	if [[ $androidversion = "O" ]]; then
+		banner
+		echo "${redt}Android O is not supported yet$normal"
+		exit_deo
+	fi
 	rm -rf $logs/extraodex.txt
 	if [[ ! -d "$framedir" || ! -f $sysdir/build.prop ]]; then
 		banner
@@ -4350,8 +4359,8 @@ get_contexts() {
 	fi
 	if [[ -f $prfiles/file_contexts.bin ]]; then
 		cp $tools/boot/file_contexts $prfiles/file_contexts
-		contest=$(strings $prfiles/file_contexts.bin | sed -n '/u:/,$p' | grep -B1 "/");
-		paste -d '\t' <(echo "$contest" | grep "/") <(echo "$contest" | grep "u:") >> $prfiles/file_contexts
+		contest=$(strings $prfiles/file_contexts.bin | sed -e '/^u:/,/\//!d' | grep -v "abcd")
+		paste -d '\t' <(echo "$contest" | grep -v "^u:") <(echo "$contest" | grep "^u:") | grep -v "S2RP\|ERCP" >> $prfiles/file_contexts
 		rm -rf $prfiles/file_contexts.bin
 	fi
 	if [[ -f $prfiles/file_contexts && $api -ge "23" ]]; then
@@ -4544,7 +4553,7 @@ imgextract() {
 		mkdir ${extractimg}
 		${usesudo2}cp -R output/* ${extractimg}/
 		${usesudo2}chown -hR $myuser:$myuser $romdir/${extractimg}
-		${usesudo2}chmod -R ug+rw $romdir/${extractimg}
+		${usesudo2}chmod -R a+rwX $romdir/${extractimg}
 		apitmp1=$(find system -name build.prop 2>/dev/null | grep -m 1 "")
 		if [[ -f $apitmp1 ]]; then
 			apitmp=$(grep "ro.build.version.sdk" "$apitmp1" | cut -d"=" -f2)
@@ -4556,7 +4565,8 @@ imgextract() {
 				cd output
 				find . -maxdepth 1 | while read line; do
 					line2=$(echo "$line" | sed 's/^\.//')
-					stat -c "set_metadata(\"/system$line2\", \"uid\", %u, \"gid\", %g, \"mode\", 0%a, \"capabilities\", 0x0, \"selabel\", \"%C\");" $line >> $prfiles/root_meta
+					filecon=$(ls -Z $line | gawk '{print $1}')
+					stat -c "set_metadata(\"/system$line2\", \"uid\", %u, \"gid\", %g, \"mode\", 0%a, \"capabilities\", 0x0, \"selabel\", \"$filecon\");" $line >> $prfiles/root_meta
 				done
 				grep -v "\"/system\/system\"\|\"/system\"" $prfiles/root_meta > $prfiles/root_meta2
 				mv $prfiles/root_meta2 $prfiles/root_meta
@@ -4597,7 +4607,10 @@ imgextract() {
 						set_metadata1="set_metadataV"
 					fi
 					if [[ $(echo "$line" | grep set_metadata) != "" ]]; then
-						echo "$line" >> $prfiles/$set_metadata1
+						ftmp=$(echo "$line2" | cut -d'"' -f2 | sed 's:^\/::')
+						if [[ -f $ftmp || -d $ftmp ]]; then
+							echo "$line" >> $prfiles/$set_metadata1
+						fi
 					elif [[ -f $line2 ]]; then
 						if [[ $(grep "$line2" $prfiles/cap_temp) != "" ]]; then
 							caps=$(grep "$line2 =" $prfiles/cap_temp | cut -d' ' -f3)
@@ -4613,7 +4626,8 @@ imgextract() {
 						else
 							caphex="0x0"
 						fi
-						stat -c "set_metadata(\"/$line\", \"uid\", %u, \"gid\", %g, \"mode\", 0%a, \"capabilities\", $caphex, \"selabel\", \"%C\");" $line2 >> $prfiles/$set_metadata1
+						filecon=$(ls -Z $line2 | gawk '{print $1}')
+						stat -c "set_metadata(\"/$line\", \"uid\", %u, \"gid\", %g, \"mode\", 0%a, \"capabilities\", $caphex, \"selabel\", \"$filecon\");" $line2 >> $prfiles/$set_metadata1
 					fi
 				done
 			fi
@@ -4804,7 +4818,7 @@ isfullrom() {
 	fullrom=""
 	fullrom1=""
 	if [[ -d $sysdir ]]; then
-		if [[ ! -d $sysdir/lib || ! -d $sysdir/etc || ! -d $sysdir/bin || ! -d $sysdir/xbin || ! -d $romdir/META-INF ]]; then
+		if [[ ! -d $sysdir/lib || ! -d $sysdir/etc || ! -d $sysdir/bin || ! -d $romdir/META-INF ]]; then
 			fullrom="No"
 			fullrom1=$(echo "$redt$t_no$normal")
 		else
@@ -5438,8 +5452,7 @@ partsdat() {
 	banner
 	echo "$bluet$t_img_create_dat $whatimg ...$normal"
 	mkdir -p $romdir/tmpsparse
-	mv ${whatimg}_new.img $romdir/tmpsparse/
-	cd $romdir/tmpsparse
+	# mv ${whatimg}_new.img $romdir/tmpsparse/
 	if [[ $api = "21" ]]; then
 		aver="1"
 	elif [[ $api = "22" ]]; then
@@ -5449,8 +5462,10 @@ partsdat() {
 	elif [[ $api -ge "24" ]]; then
 		aver="4"
 	fi
-	( $tools/img2sdat/img2sdat.py ${whatimg}_new.img $aver 2>&1 ) >> $logs/main.log
+	cd $romdir
+	( $tools/img2sdat/img2sdat.py ${whatimg}_new.img $romdir/tmpsparse $aver 2>&1 ) >> $logs/main.log
 	rm -rf ${whatimg}_new.img
+	cd $romdir/tmpsparse
 	if [[ ! $whatimg = "system" ]]; then
 		mv system.transfer.list $whatimg.transfer.list
 		mv system.new.dat $whatimg.new.dat
@@ -6633,6 +6648,7 @@ if [[ ! $(ls -d */ | grep 'superr_') = "" ]]; then
 			prchoice="first"
 			choosepr project in ${findproject[@]}
 			if [[ $REPLY = "q" ]]; then
+				echo ""
 				exit
 			elif [[ $REPLY = "n" ]]; then
 				new_project

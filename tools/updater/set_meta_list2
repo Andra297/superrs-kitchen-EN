@@ -2,6 +2,9 @@ set_metadata_recursive("/system/system", "uid", 0, "gid", 0, "dmode", 0755, "fmo
 set_metadata_recursive("/system/system/addon.d", "uid", 0, "gid", 0, "dmode", 0755, "fmode", 0755, "capabilities", 0x0, "selabel", "u:object_r:system_file:s0");
 set_metadata_recursive("/system/system/bin", "uid", 0, "gid", 2000, "dmode", 0755, "fmode", 0755, "capabilities", 0x0, "selabel", "u:object_r:system_file:s0");
 #BIN
+set_metadata_recursive("/system/system/CDA", "uid", 0, "gid", 0, "dmode", 0755, "fmode", 0644, "capabilities", 0x0, "selabel", "u:object_r:cda_res_files:s0");
+system/system/CDA
+set_metadata_recursive("/system/system/CDA/items", "uid", 0, "gid", 0, "dmode", 0755, "fmode", 0644, "capabilities", 0x0, "selabel", "u:object_r:system_file:s0");
 system/system/etc
 system/system/etc/bash
 system/system/etc/bluetooth
