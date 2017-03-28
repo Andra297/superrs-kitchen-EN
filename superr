@@ -2185,11 +2185,6 @@ deodex_start() {
 			oat2dex="$thecho"
 		fi
 	}
-	if [[ $androidversion = "O" ]]; then
-		banner
-		echo "${redt}Android O is not supported yet$normal"
-		exit_deo
-	fi
 	rm -rf $logs/extraodex.txt
 	if [[ ! -d "$framedir" || ! -f $sysdir/build.prop ]]; then
 		banner
@@ -2270,11 +2265,6 @@ deodex_start() {
 			echo ""
 			echo "1) oat2dex"
 			echo "2) smali/baksmali"
-			if [[ ! $(getconf LONG_BIT) = "64" ]]; then
-				echo "${redt}3) oatdump$normal"
-			else
-				echo "3) oatdump"
-			fi
 			echo ""
 			read -n 1 -p "$t_select" choice
 		done
@@ -2296,132 +2286,20 @@ deodex_start() {
 			baksmali="$thecho"
 			dtype="m2"
 			deodex
-		# START M oatdump
-		elif [[ $choice = "3" ]]; then
-			if [[ ! $(getconf LONG_BIT) = "64" ]]; then
-				banner
-				echo "$redt$t_deodex_need_64_bit$normal"
-				exit_deo
-			fi
-			if [[ ! -f $base/tools/oattools_m/bin/oatdump ]]; then
-				banner
-				echo "$yellowb$redt$t_notice$normal"
-				echo "$redt$t_deodex_need_oatdump$normal"
-				echo "$yellowt$t_deodex_oatdump_dl_m$normal"
-				echo ""
-				read -n 1 -p "$t_deodex_dl_q" reply
-				if [[ ! $reply = "y" ]]; then
-					echo ""
-					exit_deo
-				fi
-				banner
-				echo "$bluet$t_deodex_dl_install$normal"
-				mkdir -p $base/tools/oattools_m
-				cd $base/tools/oattools_m
-				(wget "https://bitbucket.org/superr/superrs-kitchen/downloads/oattools_m.zip" 2>&1) >/dev/null
-				if [[ ! -f $base/tools/oattools_m/oattools_m.zip ]]; then
-					banner
-					echo "$redb$yellowt$bold$t_error$normal"
-					echo "$redt$t_deodex_oatdump_dl_failed$normal"
-					rm -rf $base/tools/oattools_m
-					cd $romdir
-					exit_deo
-				fi
-				$p7z x -y oattools_m.zip 2>&1 >/dev/null
-				rm -f oattools_m.zip
-				cd $romdir
-				if [[ ! -f $base/tools/oattools_m/bin/oatdump || ! -f $base/tools/oattools_m/bin/dexrepair ]]; then
-					banner
-					echo "$redb$yellowt$bold$t_error$normal"
-					echo "$redt$t_deodex_oatdump_dl_install_failed$normal"
-					rm -rf $base/tools/oattools_m
-					exit_deo
-				fi
-			fi
-			oattools="$base/tools/oattools_m/bin"
-			dtype="m3"
-			deodex
-			return 1
 		fi
 		return 1
 	elif [[ $api -eq 23 && $androidversion = "N" ]] || [[ $api -ge 24 ]]; then
-		choice=""
-		while [[ ! ${choice} =~ ^[1-2]$ ]]; do
-			banner
-			echo "$t_deodex_use_method"
-			echo ""
-			echo "1) smali/baksmali"
-			if [[ ! $(getconf LONG_BIT) = "64" ]]; then
-				echo "${redt}2) oatdump$normal"
-			else
-				echo "2) oatdump"
-			fi
-			echo ""
-			read -n 1 -p "$t_select" choice
-		done
-		# START N smali/baksmali
-		if [[ $choice = "1" ]]; then
-			jarname="smali"
-			jartitle="$t_title_cho_smali"
-			choose_jartitle
-			smali="$thecho"
+		jarname="smali"
+		jartitle="$t_title_cho_smali"
+		choose_jartitle
+		smali="$thecho"
 
-			jarname="baksmali"
-			jartitle="$t_title_cho_baksmali"
-			choose_jartitle
-			baksmali="$thecho"
-			dtype="n2"
-			deodex
-		# START N oatdump
-		elif [[ $choice = "2" ]]; then
-			if [[ ! $(getconf LONG_BIT) = "64" ]]; then
-				banner
-				echo "$redt$t_deodex_need_64_bit$normal"
-				exit_deo
-			fi
-			if [[ -d $base/tools/oattools ]]; then
-				mv $base/tools/oattools $base/tools/oattools_n
-			fi
-			if [[ ! -f $base/tools/oattools_n/bin/oatdump ]]; then
-				banner
-				echo "$yellowb$redt$t_notice$normal"
-				echo "$redt$t_deodex_need_oatdump$normal"
-				echo "$yellowt$t_deodex_oatdump_dl_n$normal"
-				echo ""
-				read -n 1 -p "$t_deodex_dl_q" reply
-				if [[ ! $reply = "y" ]]; then
-					echo ""
-					exit_deo
-				fi
-				banner
-				echo "$bluet$t_deodex_dl_install$normal"
-				mkdir -p $base/tools/oattools_n
-				cd $base/tools/oattools_n
-				(wget "https://bitbucket.org/superr/superrs-kitchen/downloads/oattools_n.zip" 2>&1) >/dev/null
-				if [[ ! -f $base/tools/oattools_n/oattools_n.zip ]]; then
-					banner
-					echo "$redb$yellowt$bold$t_error$normal"
-					echo "$redt$t_deodex_oatdump_dl_failed$normal"
-					rm -rf $base/tools/oattools_n
-					cd $romdir
-					exit_deo
-				fi
-				$p7z x -y oattools_n.zip 2>&1 >/dev/null
-				rm -f oattools_n.zip
-				cd $romdir
-				if [[ ! -f $base/tools/oattools_n/bin/oatdump || ! -f $base/tools/oattools_n/bin/dexrepair ]]; then
-					banner
-					echo "$redb$yellowt$bold$t_error$normal"
-					echo "$redt$t_deodex_oatdump_dl_install_failed$normal"
-					rm -rf $base/tools/oattools_n
-					exit_deo
-				fi
-			fi
-			oattools="$base/tools/oattools_n/bin"
-			dtype="n"
-			deodex
-			return 1
-		fi
+		jarname="baksmali"
+		jartitle="$t_title_cho_baksmali"
+		choose_jartitle
+		baksmali="$thecho"
+		dtype="n2"
+		deodex
 	else
 		banner
 		echo "$redb$yellowt$bold$t_error$normal"
@@ -2468,8 +2346,6 @@ deodex() {
 		if [[ $dtype = "m2" || $dtype = "n2" ]]; then
 			echo -e "$bluet$t_deodex_method${greent}\t$(basename $smali)"
 			echo -e "\t$(basename $baksmali)$normal"
-		elif [[ $dtype = "n" || $dtype = "m3" ]]; then
-			echo "$bluet$t_deodex_method ${greent}oatdump$normal"
 		elif [[ $dtype = "l" || $dtype = "m" ]]; then
 			echo -e "$bluet$t_deodex_method${greent}\t$(basename $oat2dex)$normal"
 		fi
@@ -2512,22 +2388,6 @@ deodex() {
 							echo "$deoappdir/$app/$deoarch/$dexclass" >> $logs/deodex_fail_list
 							continue
 						fi
-					done
-				elif [[ $dtype = "m3" || $dtype = "n" ]]; then
-					$oattools/oatdump --oat-file="$deoappdir/$app/$deoarch/$app.odex" --export-dex-to="$deoappdir/$app/$deoarch" >> $logs/deodex.log
-					$oattools/dexrepair -I $deoappdir/$app/$deoarch >> $logs/deodex.log
-					if [[ ! -f $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex ]]; then
-						echo "${redt}${app} $t_deodex_fail$normal"
-						echo "$deoappdir/$app/$deoarch/$app.odex" >> $logs/deodex_fail_list
-						rm -rf $deoappdir/$app/$deoarch/$app.apk:classes*.dex_export.dex_repaired.dex
-						continue
-					fi
-					mv $deoappdir/$app/$deoarch/$app.apk_export.dex_repaired.dex $deoappdir/$app/$deoarch/classes.dex
-					find $deoappdir/$app/$deoarch -name $app.apk:classes*.dex_export.dex_repaired.dex | while read line; do
-						appclassdex=$(basename $line)
-						appclassdir=$(dirname $line)
-						classname=$(echo "$appclassdex" | cut -d":" -f2 | cut -d"_" -f1)
-						mv $line $appclassdir/$classname
 					done
 				elif [[ $dtype = "m" || $dtype = "l" ]]; then
 					java -Xmx${heapsize}m -jar $oat2dex $deoappdir/$app/$deoarch/$app.odex $framedir/$deoarch2/odex >> $logs/deodex.log
@@ -2743,7 +2603,7 @@ deodex() {
 	if [[ $dtype = "n2" || $dtype = "m2" ]]; then
 		if [[ $dtype = "n2" ]]; then
 			ls $framedir/$deoarch2 | grep .oat$ | sort | while read line; do
-				if [[ ! $line = "boot.oat" ]]; then
+				if [[ $line != "boot.oat" ]]; then
 					framejar=$(echo "$(echo "$line" | sed 's/^boot-//; s/\.oat$//').jar")
 					if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
 						echo ""
@@ -2844,61 +2704,6 @@ deodex() {
 			fi
 			mv $framedir/$deoarch/$line $framedir/$frame
 		done
-	else
-		mkdir -p $framedir/temp
-		for frame in $(ls $framedir/$deoarch2 | grep .oat$); do
-			if [[ $dtype = "n" ]]; then
-				if [[ ! $frame = "boot.oat" ]]; then
-					framejar=$(echo "$(echo "$frame" | sed 's/^boot-//; s/\.oat$//').jar")
-					if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-						echo ""
-						echo "$greent$frame $t_deodex_app_already$normal"
-						echo ""
-						continue
-					fi
-				fi
-			fi
-			echo ""
-			echo "$t_deodex_deodexing $frame"
-			echo ""
-			$oattools/oatdump --oat-file="$framedir/$deoarch2/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
-		done
-		if [[ -d $framedir/$deoarch ]]; then
-			for frame in $(ls $framedir/$deoarch | grep .odex$); do
-				framejar=$(echo "$(echo "$frame" | rev | cut -d"." -f2- | rev).jar")
-				if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-					echo ""
-					echo "$greent$frame $t_deodex_app_already$normal"
-					echo ""
-					continue
-				fi
-				echo ""
-				echo "$t_deodex_deodexing $frame"
-				echo ""
-				$oattools/oatdump --oat-file="$framedir/$deoarch/$frame" --export-dex-to="$framedir/temp" >> $logs/deodex.log
-			done
-		fi
-		if [[ $dtype = "m3" ]]; then
-			ls $framedir/temp | grep "export\.dex" | while read line; do
-				if [[ $(echo "$line" | grep classes) = "" ]]; then
-					framejar=$(echo "$line" | sed 's/_export\.dex//')
-				else
-					framejar=$(echo "$line" | cut -d":" -f1)
-				fi
-				if [[ ! $($p7z l $framedir/$framejar | grep classes.dex) = "" ]]; then
-					rm -rf $framedir/temp/$line
-				fi
-			done
-		fi
-		$oattools/dexrepair -I $framedir/temp >> $logs/deodex.log
-		ls $framedir/temp | grep "export.dex_repaired.dex" | while read line; do
-			if [[ $(echo "$line" | grep classes) = "" ]]; then
-				frame=$(echo "$(echo "$line" | sed 's/_export\.dex_repaired\.dex//'):classes.dex")
-			else
-				frame=$(echo "$line" | sed 's/_export\.dex_repaired\.dex//')
-			fi
-			mv $framedir/temp/$line $framedir/$frame
-		done
 	fi
 	banner
 	echo "$bluet$t_deodex_pack_jar$normal"
@@ -2955,7 +2760,7 @@ deodex() {
 	cd $romdir
 	stillodexed=$(find system vendor -name *.odex 2>/dev/null)
 	if [[ "$stillodexed" = "" ]]; then
-		if [[ $dtype = "n2" || $dtype = "n" ]]; then
+		if [[ $dtype = "n" ]]; then
 			delete_meta_inf
 		fi
 		banner
@@ -4612,7 +4417,7 @@ imgextract() {
 							echo "$line" >> $prfiles/$set_metadata1
 						fi
 					elif [[ -f $line2 ]]; then
-						if [[ $(grep "$line2" $prfiles/cap_temp) != "" ]]; then
+						if [[ $(grep "$line2 =" $prfiles/cap_temp) != "" ]]; then
 							caps=$(grep "$line2 =" $prfiles/cap_temp | cut -d' ' -f3)
 							captest=$(echo "$caps" | cut -d'+' -f1 | tr ',' ' ')
 							for a in $(echo "$captest"); do
