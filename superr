@@ -2155,7 +2155,7 @@ deodex_start() {
 				banner
 				echo "$greenb$jartitle$normal"
 				echo ""
-				findbak=$(find $tools/smali/current -name $jarname*.jar | rev | cut -d"/" -f1 | rev)
+				findbak=$(find $tools/smali/current -name $jarname*.jar | rev | cut -d"/" -f1 | rev | sort)
 				choosepr bakcho in ${findbak[@]}
 				if [[ $REPLY = "q" ]]; then
 					exit
@@ -2289,6 +2289,9 @@ deodex_start() {
 		fi
 		return 1
 	elif [[ $api -eq 23 && $androidversion = "N" ]] || [[ $api -ge 24 ]]; then
+		if [[ $androidversion = "O" ]]; then
+			api="26"
+		fi
 		jarname="smali"
 		jartitle="$t_title_cho_smali"
 		choose_jartitle
@@ -2382,7 +2385,7 @@ deodex() {
 							dexclass=$(echo "$apkdex" | cut -d":" -f2-)
 						fi
 						java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $deoappdir/$app/$deoarch/$app.odex/$apkdex -o $deoappdir/$app/$deoarch/smali >> $logs/deodex.log
-						java -Xmx${heapsize}m -jar $smali assemble $deoappdir/$app/$deoarch/smali -o $deoappdir/$app/$deoarch/$dexclass >> $logs/deodex.log
+						java -Xmx${heapsize}m -jar $smali assemble -a $api $deoappdir/$app/$deoarch/smali -o $deoappdir/$app/$deoarch/$dexclass >> $logs/deodex.log
 						rm -rf $deoappdir/$app/$deoarch/smali
 						if [[ ! -f $deoappdir/$app/$deoarch/$dexclass ]]; then
 							echo "$deoappdir/$app/$deoarch/$dexclass" >> $logs/deodex_fail_list
@@ -2480,6 +2483,22 @@ deodex() {
 			done
 		fi
 	fi
+	chimerao=$(find $sysdir/priv-app/PrebuiltGmsCore/app_chimera -name *.odex 2>/dev/null | grep "$arch")
+	chimerav=$(find $sysdir/priv-app/PrebuiltGmsCore/app_chimera -name *.vdex 2>/dev/null | grep "$arch")
+	if [[ $chimerao != "" ]]; then
+		for i in $(echo "$chimerao"); do
+			aname=$(basename $i | sed 's/\.odex//')
+			dname=$(echo "$i" | rev | cut -d"/" -f4)
+			mkdir -p $sysdir/app/$aname/oat/$arch
+			mv $i $sysdir/app/$aname/oat/$arch/
+			if [[ $chimerav != "" ]]; then
+				mv $(echo "$i" | sed 's/\.odex$/\.vdex/') $sysdir/app/$aname/oat/$arch/
+			fi
+			mv $sysdir/priv-app/PrebuiltGmsCore/app_chimera/$dname/$aname.apk $sysdir/app/$aname/
+			echo "$sysdir/app/$aname/$aname.apk $sysdir/priv-app/PrebuiltGmsCore/app_chimera/$dname/" >> $logs/extramv.txt
+		done
+		rm -rf $sysdir/priv-app/PrebuiltGmsCore/app_chimera/$dname/oat
+	fi
 	if [[ $dtype = "l" || $dtype = "m" ]]; then
 		echo "$clears"
 		echo ""
@@ -2537,17 +2556,18 @@ deodex() {
 	fi
 	if [[ -s $logs/extraodex.txt ]]; then
 		extraapp=""
-		line=""
 		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(echo $line | rev | cut -d"/" -f1 | rev)
+			extraapp=$(basename $line)
 			mv $sysdir/app/$extraapp $romdir/$line
 		done
-		line=""
-		if [[ -s $logs/extramv.txt ]]; then
-			cat $logs/extramv.txt | while read line; do
-				mv $line
-			done
-		fi
+	fi
+	if [[ -s $logs/extramv.txt ]]; then
+		cat $logs/extramv.txt | while read line; do
+			mv $line
+			if [[ $(echo "$line" | grep "app_chimera") != "" ]]; then
+				rm -rf $(dirname $(echo "$line" | gawk '{print $1}'))
+			fi
+		done
 	fi
 	rm -rf $logs/extraodex.txt
 	rm -rf $logs/extramv.txt
@@ -2626,7 +2646,7 @@ deodex() {
 						dexclass=$(echo "$line2" | cut -d":" -f2-)
 					fi
 					java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch2/$line/$line2 -o $framedir/$deoarch2/smali >> $logs/deodex.log
-					java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch2/smali -o $framedir/$line3.jar:$dexclass >> $logs/deodex.log
+					java -Xmx${heapsize}m -jar $smali assemble -a $api $framedir/$deoarch2/smali -o $framedir/$line3.jar:$dexclass >> $logs/deodex.log
 					rm -rf $framedir/$deoarch2/smali
 				done
 			done
@@ -2652,7 +2672,7 @@ deodex() {
 				echo "$t_deodex_deodexing $line2"
 				echo ""
 				java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch2/boot.oat/$line -o $framedir/smali >> $logs/deodex.log
-				java -Xmx${heapsize}m -jar $smali assemble $framedir/smali -o $framedir/$line$dexclass >> $logs/deodex.log
+				java -Xmx${heapsize}m -jar $smali assemble -a $api $framedir/smali -o $framedir/$line$dexclass >> $logs/deodex.log
 				rm -rf $framedir/smali
 			done
 		fi
@@ -2679,7 +2699,7 @@ deodex() {
 						dexclass="$apkdex"
 					fi
 					java -Xmx${heapsize}m -jar $baksmali deodex -b $framedir/$deoarch2/boot.oat $framedir/$deoarch/$frame/$apkdex -o $framedir/$deoarch/smali >> $logs/deodex.log
-					java -Xmx${heapsize}m -jar $smali assemble $framedir/$deoarch/smali -o $framedir/$dexclass >> $logs/deodex.log
+					java -Xmx${heapsize}m -jar $smali assemble -a $api $framedir/$deoarch/smali -o $framedir/$dexclass >> $logs/deodex.log
 					rm -rf $framedir/$deoarch/smali
 				done
 			done
