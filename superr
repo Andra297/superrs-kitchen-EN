@@ -2452,7 +2452,7 @@ deodex() {
 		done
 	fi
 	if [[ $dtype != "l" ]]; then
-		odextmp=$(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f4- | rev | sort -u)
+		odextmp=$(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/oat/\|system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/\|system/framework/oat\|system/vendor/framework/oat" | rev | cut -d"/" -f4- | rev | sort -u)
 	else
 		odextmp=$(find system vendor -name *.odex 2>/dev/null | grep -v "system/framework/$arch/\|system/framework/$arch2/\|system/app/\|system/priv-app/" | rev | cut -d"/" -f3- | rev | sort -u)
 	fi
@@ -2498,6 +2498,20 @@ deodex() {
 			echo "$sysdir/app/$aname/$aname.apk $sysdir/priv-app/PrebuiltGmsCore/app_chimera/$dname/" >> $logs/extramv.txt
 		done
 		rm -rf $sysdir/priv-app/PrebuiltGmsCore/app_chimera/$dname/oat
+	fi
+	if [[ -d "$sysdir/vendor/framework" ]]; then
+		vframe=$(find $sysdir/vendor/framework -name *.jar 2>/dev/null)
+		for i in $vframe; do
+			nframe=$(basename $i | sed 's/\.jar$//')
+			dframe=$(dirname $i)
+			mv $i $framedir/
+			mv $dframe/oat/$arch/$nframe.odex $framedir/oat/$arch/
+			if [[ -f $dframe/oat/$arch/$nframe.vdex ]]; then
+				mv $dframe/oat/$arch/$nframe.vdex $framedir/oat/$arch/
+			fi
+			echo "$framedir/$nframe.jar $i" >> $logs/extramv.txt
+		done
+		rm -rf $sysdir/vendor/framework/oat
 	fi
 	if [[ $dtype = "l" || $dtype = "m" ]]; then
 		echo "$clears"
@@ -2554,23 +2568,6 @@ deodex() {
 			dodeodex
 		fi
 	fi
-	if [[ -s $logs/extraodex.txt ]]; then
-		extraapp=""
-		cat $logs/extraodex.txt | while read line; do
-			extraapp=$(basename $line)
-			mv $sysdir/app/$extraapp $romdir/$line
-		done
-	fi
-	if [[ -s $logs/extramv.txt ]]; then
-		cat $logs/extramv.txt | while read line; do
-			mv $line
-			if [[ $(echo "$line" | grep "app_chimera") != "" ]]; then
-				rm -rf $(dirname $(echo "$line" | gawk '{print $1}'))
-			fi
-		done
-	fi
-	rm -rf $logs/extraodex.txt
-	rm -rf $logs/extramv.txt
 	echo "$clears"
 	echo ""
 	echo "----------------------------------------------------"
@@ -2755,6 +2752,23 @@ deodex() {
 	echo "----------------------------------------------------"
 	echo ""
 	echo ""
+	if [[ -s $logs/extraodex.txt ]]; then
+		extraapp=""
+		cat $logs/extraodex.txt | while read line; do
+			extraapp=$(basename $line)
+			mv $sysdir/app/$extraapp $romdir/$line
+		done
+	fi
+	if [[ -s $logs/extramv.txt ]]; then
+		cat $logs/extramv.txt | while read line; do
+			mv $line
+			if [[ $(echo "$line" | grep "app_chimera") != "" ]]; then
+				rm -rf $(dirname $(echo "$line" | gawk '{print $1}'))
+			fi
+		done
+	fi
+	rm -rf $logs/extraodex.txt
+	rm -rf $logs/extramv.txt
 	rm -rf $framedir/oat
 	rm -rf $framedir/$arch
 	if [[ ! $arch2 = "" ]]; then
